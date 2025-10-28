@@ -3,6 +3,7 @@
 [![GitHub Repository](https://img.shields.io/badge/GitHub-agents--orchestration--system-blue?logo=github)](https://github.com/tears-mysthrala/agents-orchestration-system)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue?logo=python)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-2025.10.28-orange)](https://github.com/tears-mysthrala/agents-orchestration-system/releases/tag/2025.10.28)
 
 ## Creation of agents for simultaneous development
 
@@ -150,3 +151,10 @@ Usa los [GitHub Issues](https://github.com/tears-mysthrala/agents-orchestration-
 ### Licencia
 
 Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
+
+## 🏷️ Versionado
+
+Este proyecto usa **versionado por fecha** (formato `YYYY.MM.DD`) para mejor mantenibilidad en desarrollo activo, en lugar del versionado semántico tradicional.
+
+- **Última versión**: `2025.10.28`
+- **Cambios principales**: Sistema de orquestación core con logging estructurado
