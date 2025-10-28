@@ -1,0 +1,48 @@
+# Git ignore para proyecto de agentes IA
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Variables de entorno
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Modelos temporales
+temp/
+cache/

@@ -1,0 +1,180 @@
+{
+    "metadata": {
+        "project": "agents-parallel-dev",
+        "version": "0.1.0",
+        "updated": "2025-10-28",
+        "description": "Template configuration for orchestrating local and remote agents."
+    },
+    "runtime": {
+        "pythonVenv": ".venv",
+        "logDirectory": "logs",
+        "artifactsDirectory": "artifacts",
+        "defaultProvider": "ollama",
+        "ollama": {
+            "host": "http://localhost:11434",
+            "defaultModel": "deepseek-chat",
+            "concurrency": 2
+        },
+        "fallbackProviders": [
+            "github-models",
+            "azure-ai-foundry"
+        ]
+    },
+    "models": {
+        "ollama": {
+            "deepseek-coder:6.7b": {
+                "context": 8192,
+                "temperature": 0.3,
+                "parallel": false,
+                "notes": "Code execution and implementation model."
+            },
+            "gemma2": {
+                "context": 8192,
+                "temperature": 0.4,
+                "parallel": false,
+                "notes": "Review and quality assurance model."
+            },
+            "phi3.5": {
+                "context": 8192,
+                "temperature": 0.5,
+                "parallel": false,
+                "notes": "Diagnostic model for system health monitoring."
+            },
+            "llama3.2": {
+                "context": 8192,
+                "temperature": 0.4,
+                "parallel": true,
+                "notes": "Conversational model for planning and communication."
+            }
+        },
+        "github-models": {
+            "gpt-4o-mini": {
+                "endpoint": "https://models.github.com",
+                "tokenEnv": "GITHUB_TOKEN"
+            }
+        },
+        "azure-ai-foundry": {
+            "gpt-4o": {
+                "endpointEnv": "AZURE_OPENAI_ENDPOINT",
+                "deploymentEnv": "AZURE_OPENAI_CHAT_DEPLOYMENT_NAME",
+                "credential": "entra-id"
+            }
+        }
+    },
+    "agents": [
+        {
+            "id": "planner",
+            "description": "Analyses backlog entries and produces ordered work plans.",
+            "entryPoint": "agents/planner.py",
+            "defaultModel": "llama3.2",
+            "tools": [
+                "task-registry",
+                "documentation-index"
+            ],
+            "outputs": [
+                "plan.md"
+            ],
+            "requires": [
+                "docs/tasks"
+            ]
+        },
+        {
+            "id": "executor",
+            "description": "Implements code changes based on planner directives.",
+            "entryPoint": "agents/executor.py",
+            "defaultModel": "deepseek-coder:6.7b",
+            "tools": [
+                "git",
+                "tests"
+            ],
+            "outputs": [
+                "patches",
+                "test-report.md"
+            ],
+            "requires": [
+                "planner"
+            ]
+        },
+        {
+            "id": "reviewer",
+            "description": "Reviews modifications, enforces standards, and raises issues.",
+            "entryPoint": "agents/reviewer.py",
+            "defaultModel": "gemma2",
+            "tools": [
+                "lint",
+                "diff-analyser"
+            ],
+            "outputs": [
+                "review-notes.md"
+            ],
+            "requires": [
+                "executor"
+            ]
+        },
+        {
+            "id": "diagnostic",
+            "description": "Monitors system health, detects issues, and provides diagnostic data.",
+            "entryPoint": "agents/diagnostic.py",
+            "defaultModel": "phi3.5",
+            "tools": [
+                "monitoring",
+                "logging",
+                "alerting"
+            ],
+            "outputs": [
+                "diagnostic-report.md"
+            ],
+            "requires": [
+                "reviewer"
+            ]
+        },
+        {
+            "id": "communication",
+            "description": "Handles external communication and feedback collection via Telegram/Discord.",
+            "entryPoint": "agents/communication.py",
+            "defaultModel": "llama3.2",
+            "tools": [
+                "telegram_bot",
+                "discord_bot",
+                "message_parsing"
+            ],
+            "outputs": [
+                "feedback-summary.md"
+            ],
+            "requires": [
+                "diagnostic"
+            ]
+        }
+    ],
+    "workflow": [
+        {
+            "from": "planner",
+            "to": "executor",
+            "artifact": "plan.md"
+        },
+        {
+            "from": "executor",
+            "to": "reviewer",
+            "artifact": "patches"
+        },
+        {
+            "from": "reviewer",
+            "to": "diagnostic",
+            "artifact": "review-notes.md"
+        },
+        {
+            "from": "diagnostic",
+            "to": "communication",
+            "artifact": "diagnostic-report.md"
+        }
+    ],
+    "monitoring": {
+        "metrics": [
+            "latency",
+            "success-rate",
+            "resource-usage"
+        ],
+        "logLevel": "info",
+        "retentionDays": 7
+    }
+}

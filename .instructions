@@ -1,0 +1,40 @@
+# Project Instructions
+
+## Proposito
+
+Mantener consistencia entre equipos y agentes que contribuyen al proyecto de desarrollo paralelo.
+
+## Principios guia
+
+- Priorizar claridad y reproducibilidad sobre velocidad.
+- Conservar archivos sensibles fuera del control de versiones (solo plantillas).
+- Documentar decisiones clave en los archivos dentro de `docs/`.
+- Verificar cambios con pruebas automatizadas y manuales antes de integrarlos.
+
+## Flujo de trabajo recomendado
+
+1. Revisar backlog correspondiente en `docs/tasks` y seleccionar tareas segun prioridad acordada.
+2. Crear rama de trabajo descriptiva (`feature/flujo-tarea` o similar).
+3. Implementar cambios con commits atomicos y mensajes claros.
+4. Ejecutar pruebas unitarias y de integracion relacionadas con la tarea.
+5. Actualizar documentacion y checklists si se incorporan herramientas o decisiones nuevas.
+6. Solicitar revision cruzada antes de fusionar y registrar hallazgos relevantes.
+
+## Estandares de codigo y documentacion
+
+- Idioma principal: espanol sin acentos (ASCII) para evitar problemas de codificacion.
+- Aplicar formato automatico segun herramienta del lenguaje (por ejemplo `black` para Python).
+- Incluir comentarios breves solo cuando el codigo no sea evidente.
+- Mantener consistencia en nombres de archivos y convenciones (`kebab-case` para scripts, `snake_case` para Python).
+
+## Manejo de configuraciones y secretos
+
+- Guardar unicamente plantillas (`.env.example`) en el repositorio.
+- Usar gestores de secretos (GitHub Secrets, Azure Key Vault u otro) para despliegues.
+- Rotar tokens y claves segun politicas internas, registrando fechas en el backlog.
+
+## Comunicacion
+
+- Reuniones de seguimiento semanal para revisar avances por flujo.
+- Uso de issues o tableros para registrar bloqueos y decisiones.
+- Anexar resumen de pruebas en cada pull request.
