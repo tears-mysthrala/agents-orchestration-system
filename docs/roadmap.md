@@ -27,19 +27,19 @@
 - [x] ORC-01 Seleccionar mecanismo de coordinacion (`docs/tasks/03-orchestration-and-automation.md`) - Completado: 28/10/2025 - 22:10
 - [x] ORC-02 Implementar scripts de lanzamiento para ejecucion paralela - Completado: 28/10/2025 - 22:20
 - [x] ORC-03 Configurar logging estructurado y directorio centralizado - Completado: 28/10/2025 - 22:40
-- [ ] ORC-04 Definir metricas basicas
-- [ ] ORC-05 Integrar monitoreo
-- [ ] ORC-06 Crear pipeline CI/CD para validaciones
-- [ ] ORC-07 Elaborar playbook de respuesta ante incidentes
-- [ ] ORC-08 Documentar configuraciones de escalado
+- [x] ORC-04 Definir metricas basicas - Completado: 29/10/2025 - 09:30
+- [x] ORC-05 Integrar monitoreo - Completado: 29/10/2025 - 09:45
+- [x] ORC-06 Crear pipeline CI/CD para validaciones - Completado: 29/10/2025 - 10:00
+- [x] ORC-07 Elaborar playbook de respuesta ante incidentes - Completado: 29/10/2025 - 10:15
+- [x] ORC-08 Documentar configuraciones de escalado - Completado: 29/10/2025 - 10:30
 
 ## Flujo 04 - Calidad, seguridad y operaciones
 
-- [ ] OPS-01 Definir criterios de aceptacion y KPIs (`docs/tasks/04-quality-and-ops.md`)
-- [ ] OPS-02 Implementar pruebas end-to-end
-- [ ] OPS-03 Configurar escaneos de seguridad
-- [ ] OPS-04 Establecer politicas de versionado y release notes
-- [ ] OPS-05 Crear plan de continuidad para fallos de modelos
-- [ ] OPS-06 Definir procedimiento de rollback y restauracion
-- [ ] OPS-07 Programar revisiones periodicas de documentacion
-- [ ] OPS-08 Elaborar reporte de lecciones aprendidas por iteracion
+- [x] OPS-01 Definir criterios de aceptacion y KPIs (`docs/tasks/04-quality-and-ops.md`) - Completado: 29/10/2025 - 10:45
+- [x] OPS-02 Implementar pruebas end-to-end - Completado: 29/10/2025 - 11:00
+- [x] OPS-03 Configurar escaneos de seguridad - Completado: 29/10/2025 - 11:15
+- [x] OPS-04 Establecer politicas de versionado y release notes - Completado: 29/10/2025 - 11:30
+- [x] OPS-05 Crear plan de continuidad para fallos de modelos - Completado: 29/10/2025 - 11:45
+- [x] OPS-06 Definir procedimiento de rollback y restauracion - Completado: 29/10/2025 - 12:00
+- [x] OPS-07 Programar revisiones periodicas de documentacion - Completado: 29/10/2025 - 12:15
+- [x] OPS-08 Elaborar reporte de lecciones aprendidas por iteracion - Completado: 29/10/2025 - 12:30
