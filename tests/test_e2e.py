@@ -297,24 +297,28 @@ class TestSystemResilience(unittest.TestCase):
     def test_missing_configuration_handling(self):
         """Test handling of missing configuration file."""
         from agents.base_agent import BaseAgent
-        from pathlib import Path
         
-        # This should raise FileNotFoundError
+        # This should raise FileNotFoundError when trying to load config
         with self.assertRaises(FileNotFoundError):
+            # BaseAgent.__init__ will call _load_config which raises FileNotFoundError
             class TestAgent(BaseAgent):
                 def _get_agent_config(self):
-                    return {}
+                    return {"id": "test"}
                 def execute(self):
                     pass
                 def create_agent(self):
                     pass
+                def _load_prompt_template(self):
+                    return "test prompt"
             
+            # This will fail in _load_config with FileNotFoundError
             TestAgent(config_path="nonexistent/config.json")
 
     def test_invalid_json_configuration(self):
         """Test handling of invalid JSON in configuration."""
         from agents.base_agent import BaseAgent
         import tempfile
+        from pathlib import Path
         
         # Create temp file with invalid JSON
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -322,15 +326,19 @@ class TestSystemResilience(unittest.TestCase):
             temp_path = f.name
         
         try:
+            # This should raise ValueError when parsing invalid JSON
             with self.assertRaises(ValueError):
                 class TestAgent(BaseAgent):
                     def _get_agent_config(self):
-                        return {}
+                        return {"id": "test"}
                     def execute(self):
                         pass
                     def create_agent(self):
                         pass
+                    def _load_prompt_template(self):
+                        return "test prompt"
                 
+                # This will fail in _load_config with ValueError
                 TestAgent(config_path=temp_path)
         finally:
             Path(temp_path).unlink()
