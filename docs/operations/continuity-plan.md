@@ -2,15 +2,17 @@
 
 ## Purpose
 
-This document outlines the continuity plan for handling failures of remote model providers (GitHub Models, Azure AI Foundry) and ensuring system availability.
+This document outlines the continuity plan for handling failures of the local Ollama provider and temporary overload scenarios requiring fallback to remote model providers (GitHub Models, Azure AI Foundry).
 
 ## Provider Architecture
 
-The system uses a **primary + fallback** architecture:
+The system uses a **local-first with remote fallback** architecture:
 
-1. **Primary**: Ollama (local models)
-2. **Fallback 1**: GitHub Models (remote)
-3. **Fallback 2**: Azure AI Foundry (remote)
+1. **Primary (Default)**: Ollama (local models) - For normal operations and local development
+2. **Fallback 1**: GitHub Models (remote) - Used only when Ollama is down or overloaded
+3. **Fallback 2**: Azure AI Foundry (remote) - Used only when both Ollama and GitHub Models fail
+
+This ensures cost-effective local development while maintaining availability during overload or failure scenarios.
 
 ## Automatic Failover
 
@@ -157,32 +159,38 @@ echo $AZURE_OPENAI_API_KEY
 
 ## Manual Provider Override
 
-### Temporary Override
+### Temporary Override (Emergency Use Only)
+
+Use this only when local Ollama is unavailable or overloaded:
 
 ```python
 from agents.planner import PlannerAgent
 
 planner = PlannerAgent()
 
-# Override to specific provider
+# Override to remote provider temporarily (for overload cases)
 planner.switch_provider("github-models", "gpt-4o-mini")
 
 # Execute with override
 plan = planner.execute()
 ```
 
-### Configuration Override
+### Configuration Override (Not Recommended)
 
-Edit `config/agents.config.json`:
+**Note**: The default configuration already uses Ollama (local) as primary with remote providers as fallback. This is the recommended setup for local development.
+
+Current recommended configuration in `config/agents.config.json`:
 
 ```json
 {
   "runtime": {
-    "defaultProvider": "github-models",  // Changed
-    "fallbackProviders": ["ollama", "azure-ai-foundry"]
+    "defaultProvider": "ollama",  // Local development (RECOMMENDED)
+    "fallbackProviders": ["github-models", "azure-ai-foundry"]  // Remote fallbacks for overload
   }
 }
 ```
+
+Only change this if you need to force remote providers (not recommended for normal operation).
 
 ## Capacity Planning
 

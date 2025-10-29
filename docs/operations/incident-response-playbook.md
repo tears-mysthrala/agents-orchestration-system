@@ -55,8 +55,11 @@ This playbook provides step-by-step procedures for responding to incidents in th
      ```bash
      invoke run-planner  # or run-executor, run-reviewer
      ```
-   - Switch to fallback provider if primary is down:
-     - Edit `config/agents.config.json` and change `defaultProvider`
+   - If Ollama is down and fallback isn't working:
+     - Restart Ollama: `ollama serve`
+     - Verify connection: `curl http://localhost:11434/api/tags`
+   - For temporary overload, system will auto-failover to remote providers
+   - Only as last resort: Edit `config/agents.config.json` defaultProvider (not recommended - restore to "ollama" after issue resolved)
    - Rollback recent changes if identified as cause
 
 4. **Recover**:
