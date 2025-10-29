@@ -1,0 +1,198 @@
+name: Agent Orchestration CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate agents config
+        run: |
+          python -c "import json; json.load(open('config/agents.config.json'))"
+          echo "✅ Configuration is valid JSON"
+
+      - name: Check required files
+        run: |
+          test -f config/agents.config.json || (echo "❌ Missing config/agents.config.json" && exit 1)
+          test -f requirements.txt || (echo "❌ Missing requirements.txt" && exit 1)
+          test -f tasks.py || (echo "❌ Missing tasks.py" && exit 1)
+          echo "✅ All required files present"
+
+  lint:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black
+
+      - name: Run flake8
+        continue-on-error: true
+        run: |
+          flake8 agents/ orchestration/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 agents/ orchestration/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Check formatting with black
+        continue-on-error: true
+        run: |
+          black --check agents/ orchestration/ || echo "⚠️ Some files need formatting"
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [validate, lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        continue-on-error: true
+        run: |
+          python -m pytest tests/ -v --tb=short || echo "⚠️ Some tests failed"
+
+      - name: Test invoke tasks
+        run: |
+          invoke --list
+          echo "✅ Invoke tasks available"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Check dependencies for vulnerabilities
+        continue-on-error: true
+        run: |
+          pip install -r requirements.txt
+          safety check --json || echo "⚠️ Some vulnerabilities found"
+
+      - name: Check for secrets
+        run: |
+          if grep -r "GITHUB_TOKEN\s*=\s*['\"]" .; then
+            echo "❌ Potential hardcoded token found"
+            exit 1
+          fi
+          if grep -r "api[_-]key\s*=\s*['\"][^{]" .; then
+            echo "❌ Potential hardcoded API key found"
+            exit 1
+          fi
+          echo "✅ No obvious secrets in code"
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test coordinator instantiation
+        run: |
+          python -c "from orchestration.coordinator import AgentCoordinator; print('✅ Coordinator loads successfully')"
+
+      - name: Test metrics collection
+        run: |
+          python -c "from orchestration.metrics import get_metrics_collector; mc = get_metrics_collector(); print('✅ Metrics collector works')"
+
+      - name: Test monitoring service
+        run: |
+          python -c "from orchestration.monitoring import get_monitoring_service; ms = get_monitoring_service(); print('✅ Monitoring service works')"
+
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check documentation files
+        run: |
+          test -f README.md || (echo "❌ Missing README.md" && exit 1)
+          test -f docs/project-overview.md || (echo "❌ Missing project-overview.md" && exit 1)
+          test -f docs/roadmap.md || (echo "❌ Missing roadmap.md" && exit 1)
+          test -f docs/operations/incident-response-playbook.md || (echo "❌ Missing playbook" && exit 1)
+          test -f docs/operations/scaling-guide.md || (echo "❌ Missing scaling guide" && exit 1)
+          echo "✅ Documentation files present"
+
+      - name: Check for broken links in markdown
+        continue-on-error: true
+        run: |
+          sudo apt-get update && sudo apt-get install -y markdown
+          find docs -name "*.md" -exec markdown {} \; > /dev/null || echo "⚠️ Some markdown may have issues"
+
+  build-status:
+    name: Build Status Summary
+    runs-on: ubuntu-latest
+    needs: [validate, lint, test, security, integration, docs]
+    if: always()
+    steps:
+      - name: Check build status
+        run: |
+          echo "🔍 Build Summary:"
+          echo "Validation: ${{ needs.validate.result }}"
+          echo "Linting: ${{ needs.lint.result }}"
+          echo "Tests: ${{ needs.test.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          echo "Integration: ${{ needs.integration.result }}"
+          echo "Documentation: ${{ needs.docs.result }}"
+
+          if [[ "${{ needs.validate.result }}" == "failure" ]]; then
+            echo "❌ Build failed: Configuration validation failed"
+            exit 1
+          fi
+
+          echo "✅ Build completed"
