@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 from crewai import Agent, LLM
+from .rag_retriever import RAGRetriever
 
 
 class BaseAgent(ABC):
@@ -28,6 +29,7 @@ class BaseAgent(ABC):
         self.prompt_template = self._load_prompt_template()
         self._llm: Optional[LLM] = None
         self._current_provider = None
+        self._retriever: Optional[RAGRetriever] = None
 
     def _load_config(self) -> Dict[str, Any]:
         """Cargar configuración desde archivo JSON."""
@@ -240,3 +242,32 @@ class BaseAgent(ABC):
         if self._llm is None:
             self._llm = self._initialize_llm()
         return self._llm
+
+    @property
+    def retriever(self) -> RAGRetriever:
+        """Obtener el retriever RAG, inicializándolo si es necesario."""
+        if self._retriever is None:
+            self._retriever = RAGRetriever()
+        return self._retriever
+
+    def retrieve_relevant_info(self, query: str, k: int = 3) -> str:
+        """Recuperar información relevante para una consulta usando RAG.
+
+        Args:
+            query: Consulta para buscar información relevante
+            k: Número de documentos a recuperar
+
+        Returns:
+            String con la información relevante formateada
+        """
+        results = self.retriever.retrieve(query, k=k)
+
+        if not results:
+            return "No se encontró información relevante en la base de conocimientos."
+
+        formatted_info = "Información relevante recuperada:\n\n"
+        for i, result in enumerate(results, 1):
+            formatted_info += f"**Fuente {i}: {result['source']}**\n"
+            formatted_info += f"{result['content'][:500]}{'...' if len(result['content']) > 500 else ''}\n\n"
+
+        return formatted_info

@@ -46,3 +46,19 @@ Thumbs.db
 # Modelos temporales
 temp/
 cache/
+
+# Vector stores y bases de datos de embeddings
+vectorstore/
+*.faiss
+*.pkl
+chroma.sqlite3
+
+# Modelos de IA descargados
+models/
+*.bin
+*.gguf
+*.safetensors
+
+# Archivos de configuración sensibles
+config/secrets.json
+config/*.key

@@ -55,7 +55,15 @@ class ExecutorAgent(BaseAgent):
         """
         # Crear prompt personalizado con la especificación de tarea
         task_text = self._format_task_spec(task_spec)
-        prompt = self.prompt_template.replace("{{TASK_SPEC}}", task_text)
+
+        # Recuperar información relevante usando RAG
+        rag_query = f"implementación de código y desarrollo: {task_spec.get('description', '')} {task_spec.get('requirements', '')}"
+        relevant_info = self.retrieve_relevant_info(rag_query, k=3)
+
+        # Combinar especificación de tarea con conocimiento recuperado
+        combined_context = f"{task_text}\n\n{relevant_info}"
+
+        prompt = self.prompt_template.replace("{{TASK_SPEC}}", combined_context)
 
         # Crear tarea de ejecución
         execution_task = Task(

@@ -11,3 +11,8 @@ invoke==2.2.0
 pytest==8.4.2
 setuptools>=75.0.0
 psutil==6.1.0
+chromadb==0.4.24
+tiktoken==0.7.0
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0
+litellm==1.79.0

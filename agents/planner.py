@@ -63,7 +63,15 @@ class PlannerAgent(BaseAgent):
         """
         # Crear prompt personalizado con las entradas del backlog
         backlog_text = self._format_backlog_entries(backlog_entries)
-        prompt = self.prompt_template.replace("{{BACKLOG_ENTRIES}}", backlog_text)
+
+        # Recuperar información relevante usando RAG
+        rag_query = f"planificación de tareas y gestión de proyectos: {' '.join([entry.get('title', '') + ' ' + entry.get('description', '') for entry in backlog_entries])}"
+        relevant_info = self.retrieve_relevant_info(rag_query, k=3)
+
+        # Combinar información del backlog con conocimiento recuperado
+        combined_context = f"{backlog_text}\n\n{relevant_info}"
+
+        prompt = self.prompt_template.replace("{{BACKLOG_ENTRIES}}", combined_context)
 
         # Crear tarea de planificación
         planning_task = Task(
