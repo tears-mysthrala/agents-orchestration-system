@@ -49,7 +49,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    def execute(self) -> Any:
+    def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """Ejecutar la lógica principal del agente. Debe ser implementado por subclases."""
         pass
 

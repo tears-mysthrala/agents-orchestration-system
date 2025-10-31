@@ -24,6 +24,34 @@
             </div>
         </div>
 
+        <!-- Nuevo Proyecto -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Nuevo Proyecto</h5>
+            </div>
+            <div class="card-body">
+                <form id="newProjectForm">
+                    <div class="mb-3">
+                        <label for="projectName" class="form-label">Nombre del Proyecto</label>
+                        <input type="text" class="form-control" id="projectName"
+                            placeholder="Nombre descriptivo del proyecto">
+                    </div>
+                    <div class="mb-3">
+                        <label for="projectMarkdown" class="form-label">Especificaciones del Proyecto (Markdown)</label>
+                        <textarea class="form-control" id="projectMarkdown" rows="10"
+                            placeholder="Escribe las especificaciones del proyecto en formato Markdown..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="projectBasePath" class="form-label">Ruta Base del Proyecto</label>
+                        <input type="text" class="form-control" id="projectBasePath"
+                            placeholder="Ej: C:\Users\usuario\proyectos\mi-proyecto">
+                    </div>
+                    <button type="button" class="btn btn-success" onclick="createNewProject()">Crear Nuevo
+                        Proyecto</button>
+                </form>
+            </div>
+        </div>
+
         <!-- Workflows -->
         <div class="card mb-4">
             <div class="card-header">
@@ -42,7 +70,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="agentModalTitle">Añadir Agente</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="agentForm">
@@ -105,10 +133,17 @@
             const list = document.getElementById('workflows-list');
             list.innerHTML = '<ul class="list-group">';
             data.workflows.forEach(workflow => {
+                const isProject = workflow.type === 'project';
+                const displayName = isProject ? `📁 ${workflow.artifact}` : `${workflow.from} → ${workflow.to} (${workflow.artifact})`;
+                const workflowId = isProject ? workflow.to : `${workflow.from}-${workflow.to}`;
+
                 list.innerHTML += `
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        ${workflow.from} → ${workflow.to} (${workflow.artifact})
-                        <button class="btn btn-sm btn-outline-success" onclick="executeWorkflow('${workflow.from}-${workflow.to}')">Ejecutar</button>
+                        <div>
+                            <strong>${displayName}</strong>
+                            ${isProject ? `<br><small>Proyecto creado: ${new Date(workflow.project.created_at).toLocaleString()}</small>` : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" onclick="executeWorkflow('${workflowId}')">Ejecutar</button>
                     </li>
                 `;
             });
@@ -189,7 +224,39 @@
             alert(result.message);
         }
 
-        // Cargar datos iniciales
+        async function createNewProject() {
+            const name = document.getElementById('projectName').value;
+            const markdown = document.getElementById('projectMarkdown').value;
+            const basePath = document.getElementById('projectBasePath').value;
+
+            if (!markdown.trim()) {
+                alert('Por favor, escribe las especificaciones del proyecto.');
+                return;
+            }
+
+            const project = {
+                name: name || `Proyecto ${new Date().toLocaleString()}`,
+                markdown: markdown,
+                base_path: basePath
+            };
+
+            const response = await fetch('/api/projects/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(project)
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                alert(result.message + ' - ID: ' + result.project_id);
+                // Limpiar formulario
+                document.getElementById('newProjectForm').reset();
+                // Recargar workflows para mostrar el nuevo proyecto
+                loadWorkflows();
+            } else {
+                alert('Error: ' + result.detail);
+            }
+        }        // Cargar datos iniciales
         loadAgents();
         loadWorkflows();
     </script>

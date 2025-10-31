@@ -6,7 +6,7 @@ Utiliza modelos locales (Ollama) con fallback a proveedores remotos.
 """
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from crewai import Agent, Task, Crew, LLM
 from .base_agent import BaseAgent
 
@@ -108,27 +108,32 @@ class PlannerAgent(BaseAgent):
         # En una implementación completa, podríamos parsear el Markdown
         return {"plan": str(result), "status": "completed"}
 
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Ejecutar la lógica principal del agente planificador."""
-        # Sample backlog for demonstration
-        sample_backlog = [
-            {
-                "title": "Implementar autenticación de usuarios",
-                "description": "Crear sistema de login con JWT",
-                "priority": "Alta",
-                "estimate": "2 días",
-                "dependencies": [],
-            },
-            {
-                "title": "Crear esquema de BD para usuarios y proyectos",
-                "description": "Diseñar tablas y relaciones",
-                "priority": "Alta",
-                "estimate": "1 día",
-                "dependencies": [],
-            },
-        ]
+        if parameters and "markdown" in parameters:
+            # Parsear el markdown para extraer tareas
+            markdown_content = parameters["markdown"]
+            backlog_entries = self._parse_markdown_to_backlog(markdown_content)
+        else:
+            # Usar sample backlog por defecto
+            backlog_entries = [
+                {
+                    "title": "Implementar autenticación de usuarios",
+                    "description": "Crear sistema de login con JWT",
+                    "priority": "Alta",
+                    "estimate": "2 días",
+                    "dependencies": [],
+                },
+                {
+                    "title": "Crear esquema de BD para usuarios y proyectos",
+                    "description": "Diseñar tablas y relaciones",
+                    "priority": "Alta",
+                    "estimate": "1 día",
+                    "dependencies": [],
+                },
+            ]
 
-        plan = self.plan_tasks(sample_backlog)
+        plan = self.plan_tasks(backlog_entries)
         self.save_plan(plan)
         return plan
 
@@ -148,6 +153,43 @@ class PlannerAgent(BaseAgent):
         if self._llm is None:
             self._llm = self._initialize_llm()
         return self._llm
+
+    def _parse_markdown_to_backlog(self, markdown: str) -> List[Dict[str, Any]]:
+        """Parsear markdown simple a entradas del backlog."""
+        lines = markdown.strip().split("\n")
+        backlog = []
+        current_task = None
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith("- ") or line.startswith("* "):
+                # Nueva tarea
+                if current_task:
+                    backlog.append(current_task)
+                title = line[2:].strip()
+                current_task = {
+                    "title": title,
+                    "description": title,  # Usar título como descripción por defecto
+                    "priority": "Media",
+                    "estimate": "N/A",
+                    "dependencies": [],
+                }
+            elif current_task and line.startswith("  - ") and ":" in line:
+                # Propiedad de la tarea
+                key, value = line[4:].split(":", 1)
+                key = key.strip().lower()
+                value = value.strip()
+                if key == "prioridad" or key == "priority":
+                    current_task["priority"] = value
+                elif key == "estimación" or key == "estimate":
+                    current_task["estimate"] = value
+                elif key == "dependencias" or key == "dependencies":
+                    current_task["dependencies"] = [d.strip() for d in value.split(",")]
+
+        if current_task:
+            backlog.append(current_task)
+
+        return backlog
 
 
 if __name__ == "__main__":

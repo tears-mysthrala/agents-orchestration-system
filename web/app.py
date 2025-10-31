@@ -14,6 +14,14 @@ from fastapi.responses import FileResponse
 import json
 from typing import Dict, Any
 from pathlib import Path
+import os
+import sys
+import time
+from datetime import datetime
+
+# Agregar el directorio padre al path para importar módulos
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from orchestration.coordinator import AgentCoordinator
 
 app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
@@ -105,28 +113,136 @@ async def delete_agent(agent_id: str):
 async def get_workflows():
     """Lista los workflows configurados."""
     config = load_config()
-    return {"workflows": config.get("workflow", [])}
+    workflows = config.get("workflow", [])
+    projects = config.get("projects", [])
+
+    # Convertir proyectos a formato workflow para la UI
+    project_workflows = []
+    for project in projects:
+        project_workflows.append(
+            {
+                "from": "project",
+                "to": project["id"],
+                "artifact": project["name"],
+                "type": "project",
+                "project": project,
+            }
+        )
+
+    return {"workflows": workflows + project_workflows}
 
 
 @app.post("/api/workflows/{workflow_id}/execute")
 async def execute_workflow(workflow_id: str):
     """Ejecuta un workflow completo."""
     try:
-        execution = coordinator.execute_workflow(workflow_id=workflow_id)
+        config = load_config()
+
+        # Verificar si es un proyecto
+        projects = config.get("projects", [])
+        project = next((p for p in projects if p["id"] == workflow_id), None)
+
+        if project:
+            # Es un proyecto, ejecutar con sus parámetros
+            parameters = {
+                "markdown": project["markdown"],
+                "base_path": project["base_path"],
+                "project_id": project["id"],
+            }
+
+            execution = coordinator.execute_workflow(
+                workflow_id=workflow_id, parameters=parameters
+            )
+
+            # Actualizar status del proyecto
+            for p in projects:
+                if p["id"] == workflow_id:
+                    p["status"] = "running"
+                    p["execution_id"] = execution.workflow_id
+                    break
+            save_config(config)
+
+            return {
+                "message": f"Project '{project['name']}' workflow execution started",
+                "execution_id": execution.workflow_id,
+            }
+        else:
+            # Es un workflow estándar
+            execution = coordinator.execute_workflow(workflow_id=workflow_id)
+            return {
+                "message": f"Workflow {workflow_id} execution started",
+                "execution_id": execution.workflow_id,
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/projects/new")
+async def create_new_project(project: Dict[str, Any]):
+    """Crear y ejecutar un nuevo proyecto basado en especificaciones."""
+    try:
+        markdown = project.get("markdown", "")
+        base_path = project.get("base_path", "")
+        name = project.get("name", f"Proyecto {int(time.time())}")
+
+        if not markdown:
+            raise HTTPException(
+                status_code=400, detail="Markdown specifications are required"
+            )
+
+        # Cargar config
+        config = load_config()
+        if "projects" not in config:
+            config["projects"] = []
+
+        # Crear ID único para el proyecto
+        project_id = f"project_{int(time.time())}"
+
+        # Guardar proyecto en config
+        new_project = {
+            "id": project_id,
+            "name": name,
+            "markdown": markdown,
+            "base_path": base_path,
+            "created_at": datetime.now().isoformat(),
+            "status": "created",
+        }
+        config["projects"].append(new_project)
+        save_config(config)
+
+        # Crear workflow personalizado con parámetros
+        parameters = {
+            "markdown": markdown,
+            "base_path": base_path,
+            "project_id": project_id,
+        }
+
+        execution = coordinator.execute_workflow(
+            workflow_id=project_id, parameters=parameters
+        )
+
+        # Actualizar status del proyecto
+        for p in config["projects"]:
+            if p["id"] == project_id:
+                p["status"] = "running"
+                p["execution_id"] = execution.workflow_id
+                break
+        save_config(config)
+
         return {
-            "message": f"Workflow {workflow_id} execution started",
+            "message": f"New project '{name}' created and workflow started",
+            "project_id": project_id,
             "execution_id": execution.workflow_id,
+            "parameters": parameters,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/agents/{agent_id}/execute")
-async def execute_agent(agent_id: str):
-    """Ejecuta un agente individual."""
-    # TODO: Implementar ejecución individual
-    return {"message": f"Agent {agent_id} execution started"}
-
-
 # Montar archivos estáticos
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

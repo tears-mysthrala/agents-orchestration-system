@@ -7,7 +7,7 @@ Utiliza modelos locales (Ollama) con fallback a proveedores remotos.
 
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from crewai import Agent, Task, Crew, LLM
 from .base_agent import BaseAgent
 
@@ -205,20 +205,58 @@ class ExecutorAgent(BaseAgent):
 
         print(f"Reporte guardado en: {output_path}")
 
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Ejecutar la lógica principal del agente ejecutor."""
-        # Sample task for demonstration
-        sample_task = {
-            "title": "Implementar función de validación",
-            "description": "Crear función que valide entrada de usuario",
-            "requirements": "Debe retornar True/False, manejar excepciones",
-            "files": ["utils/validation.py"],
-            "code_changes": ["Agregar función validate_input()", "Incluir pruebas"],
-        }
+        if parameters and "planner_result" in parameters:
+            # Usar el plan del planner
+            planner_result = parameters["planner_result"]
+            plan_content = planner_result.get("plan", "")
+            tasks = self._parse_plan_to_tasks(plan_content)
+            # Ejecutar la primera tarea por simplicidad
+            if tasks:
+                result = self.execute_task(tasks[0])
+            else:
+                result = {"status": "error", "message": "No tasks found in plan"}
+        else:
+            # Sample task for demonstration
+            sample_task = {
+                "title": "Implementar función de validación",
+                "description": "Crear función que valide entrada de usuario",
+                "requirements": "Debe retornar True/False, manejar excepciones",
+                "files": ["utils/validation.py"],
+                "code_changes": ["Agregar función validate_input()", "Incluir pruebas"],
+            }
+            result = self.execute_task(sample_task)
 
-        result = self.execute_task(sample_task)
         self.save_report(result)
         return result
+
+    def _parse_plan_to_tasks(self, plan_content: str) -> List[Dict[str, Any]]:
+        """Parsear el plan generado por el planner a tareas ejecutables."""
+        # Por simplicidad, extraer líneas que parezcan tareas
+        lines = plan_content.split("\n")
+        tasks = []
+        current_task = None
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith("## ") or line.startswith("### "):
+                # Nueva tarea
+                if current_task:
+                    tasks.append(current_task)
+                title = line[3:].strip()
+                current_task = {
+                    "title": title,
+                    "description": title,
+                    "requirements": "Implementar según especificaciones",
+                    "files": [],  # Se determinará dinámicamente
+                    "code_changes": [title],
+                }
+
+        if current_task:
+            tasks.append(current_task)
+
+        return tasks
 
     @property
     def llm(self) -> LLM:

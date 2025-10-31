@@ -59,6 +59,7 @@ class WorkflowStep:
     depends_on: Optional[List[AgentType]] = None
     timeout: int = 300  # 5 minutos por defecto
     retry_count: int = 1
+    parameters: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         if self.depends_on is None:
@@ -142,6 +143,7 @@ class AgentCoordinator:
         self,
         workflow_id: Optional[str] = None,
         custom_steps: Optional[Dict[AgentType, WorkflowStep]] = None,
+        parameters: Optional[Dict[str, Any]] = None,
     ) -> WorkflowExecution:
         """
         Ejecuta un workflow completo de agentes.
@@ -149,6 +151,7 @@ class AgentCoordinator:
         Args:
             workflow_id: ID único para el workflow (generado si no se proporciona)
             custom_steps: Pasos personalizados (usa estándar si no se proporciona)
+            parameters: Parámetros adicionales para pasar a los agentes
 
         Returns:
             WorkflowExecution: Resultado de la ejecución completa
@@ -181,10 +184,18 @@ class AgentCoordinator:
                     break
 
                 # Ejecutar paso con reintentos
-                success = self._execute_step_with_retry(execution, step_type, step)
+                success = self._execute_step_with_retry(
+                    execution, step_type, step, parameters
+                )
 
                 if success:
                     completed_steps.add(step_type)
+                    # Acumular resultado para siguientes agentes
+                    if parameters is None:
+                        parameters = {}
+                    parameters[f"{step_type.value}_result"] = execution.results[
+                        step_type
+                    ]
                     log_agent_action(
                         self.logger,
                         step_type.value,
@@ -223,7 +234,11 @@ class AgentCoordinator:
         return execution
 
     def _execute_step_with_retry(
-        self, execution: WorkflowExecution, step_type: AgentType, step: WorkflowStep
+        self,
+        execution: WorkflowExecution,
+        step_type: AgentType,
+        step: WorkflowStep,
+        parameters: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Ejecuta un paso con lógica de reintentos.
@@ -249,7 +264,9 @@ class AgentCoordinator:
                 )
 
                 # Ejecutar agente con timeout
-                result = self._execute_agent_with_timeout(agent, step.timeout)
+                result = self._execute_agent_with_timeout(
+                    agent, step.timeout, step.parameters or parameters
+                )
 
                 execution.results[step_type] = result
                 log_agent_action(
@@ -280,13 +297,16 @@ class AgentCoordinator:
         )
         return False
 
-    def _execute_agent_with_timeout(self, agent, timeout: int):
+    def _execute_agent_with_timeout(
+        self, agent, timeout: int, parameters: Optional[Dict[str, Any]] = None
+    ):
         """
         Ejecuta un agente con timeout.
 
         Args:
             agent: Instancia del agente
             timeout: Timeout en segundos
+            parameters: Parámetros para pasar al agente
 
         Returns:
             Resultado de la ejecución del agente
@@ -294,7 +314,7 @@ class AgentCoordinator:
         # Para esta implementación simplificada, asumimos que los agentes
         # tienen un método execute() que retorna el resultado
         # En una implementación real, esto debería manejar timeouts apropiadamente
-        return agent.execute()
+        return agent.execute(parameters)
 
     def schedule_workflow(
         self,

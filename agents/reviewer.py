@@ -7,7 +7,7 @@ Utiliza modelos locales (Ollama) con fallback a proveedores remotos.
 
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from crewai import Agent, Task, Crew, LLM
 from .base_agent import BaseAgent
 
@@ -253,16 +253,27 @@ Proporciona:
 
         print(f"Reporte de revisión guardado en: {output_path}")
 
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Ejecutar la lógica principal del agente revisor."""
-        # Sample code changes for demonstration
-        sample_changes = {
-            "files": ["utils/validation.py"],
-            "change_type": "Nueva funcionalidad",
-            "new_code": "def validate_input(data):\n    return isinstance(data, str) and len(data) > 0",
-        }
+        if parameters and "executor_result" in parameters:
+            # Revisar el resultado de la ejecución
+            executor_result = parameters["executor_result"]
+            # Crear cambios de código basados en el resultado
+            code_changes = {
+                "files": executor_result.get("files_modified", []),
+                "change_type": "Implementación de tarea",
+                "new_code": executor_result.get("code_implemented", ""),
+            }
+            review = self.review_code(code_changes)
+        else:
+            # Sample code changes for demonstration
+            sample_changes = {
+                "files": ["utils/validation.py"],
+                "change_type": "Nueva funcionalidad",
+                "new_code": "def validate_input(data):\n    return isinstance(data, str) and len(data) > 0",
+            }
+            review = self.review_code(sample_changes)
 
-        review = self.review_code(sample_changes)
         self.save_review_report(review)
         return review
 

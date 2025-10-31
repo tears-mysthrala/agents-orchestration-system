@@ -1,180 +1,191 @@
 {
-    "metadata": {
-        "project": "agents-parallel-dev",
-        "version": "0.1.0",
-        "updated": "2025-10-28",
-        "description": "Template configuration for orchestrating local and remote agents."
+  "metadata": {
+    "project": "agents-parallel-dev",
+    "version": "0.1.0",
+    "updated": "2025-10-28",
+    "description": "Template configuration for orchestrating local and remote agents."
+  },
+  "runtime": {
+    "pythonVenv": ".venv",
+    "logDirectory": "logs",
+    "artifactsDirectory": "artifacts",
+    "defaultProvider": "ollama",
+    "ollama": {
+      "host": "http://localhost:11434",
+      "defaultModel": "deepseek-chat",
+      "concurrency": 2
     },
-    "runtime": {
-        "pythonVenv": ".venv",
-        "logDirectory": "logs",
-        "artifactsDirectory": "artifacts",
-        "defaultProvider": "ollama",
-        "ollama": {
-            "host": "http://localhost:11434",
-            "defaultModel": "deepseek-chat",
-            "concurrency": 2
-        },
-        "fallbackProviders": [
-            "github-models",
-            "azure-ai-foundry"
-        ]
+    "fallbackProviders": [
+      "github-models",
+      "azure-ai-foundry"
+    ]
+  },
+  "models": {
+    "ollama": {
+      "deepseek-coder:6.7b": {
+        "context": 8192,
+        "temperature": 0.3,
+        "parallel": false,
+        "notes": "Code execution and implementation model."
+      },
+      "gemma2": {
+        "context": 8192,
+        "temperature": 0.4,
+        "parallel": false,
+        "notes": "Review and quality assurance model."
+      },
+      "phi3.5": {
+        "context": 8192,
+        "temperature": 0.5,
+        "parallel": false,
+        "notes": "Diagnostic model for system health monitoring."
+      },
+      "llama3.2:latest": {
+        "context": 8192,
+        "temperature": 0.4,
+        "parallel": true,
+        "notes": "Conversational model for planning and communication."
+      }
     },
-    "models": {
-        "ollama": {
-            "deepseek-coder:6.7b": {
-                "context": 8192,
-                "temperature": 0.3,
-                "parallel": false,
-                "notes": "Code execution and implementation model."
-            },
-            "gemma2": {
-                "context": 8192,
-                "temperature": 0.4,
-                "parallel": false,
-                "notes": "Review and quality assurance model."
-            },
-            "phi3.5": {
-                "context": 8192,
-                "temperature": 0.5,
-                "parallel": false,
-                "notes": "Diagnostic model for system health monitoring."
-            },
-            "llama3.2:latest": {
-                "context": 8192,
-                "temperature": 0.4,
-                "parallel": true,
-                "notes": "Conversational model for planning and communication."
-            }
-        },
-        "github-models": {
-            "gpt-4o-mini": {
-                "endpoint": "https://models.github.com",
-                "tokenEnv": "GITHUB_TOKEN"
-            }
-        },
-        "azure-ai-foundry": {
-            "gpt-4o": {
-                "endpointEnv": "AZURE_OPENAI_ENDPOINT",
-                "deploymentEnv": "AZURE_OPENAI_CHAT_DEPLOYMENT_NAME",
-                "credential": "entra-id"
-            }
-        }
+    "github-models": {
+      "gpt-4o-mini": {
+        "endpoint": "https://models.github.com",
+        "tokenEnv": "GITHUB_TOKEN"
+      }
     },
-    "agents": [
-        {
-            "id": "planner",
-            "description": "Analyses backlog entries and produces ordered work plans.",
-            "entryPoint": "agents/planner.py",
-            "defaultModel": "llama3.2:latest",
-            "tools": [
-                "task-registry",
-                "documentation-index"
-            ],
-            "outputs": [
-                "plan.md"
-            ],
-            "requires": [
-                "docs/tasks"
-            ]
-        },
-        {
-            "id": "executor",
-            "description": "Implements code changes based on planner directives.",
-            "entryPoint": "agents/executor.py",
-            "defaultModel": "deepseek-coder:6.7b",
-            "tools": [
-                "git",
-                "tests"
-            ],
-            "outputs": [
-                "patches",
-                "test-report.md"
-            ],
-            "requires": [
-                "planner"
-            ]
-        },
-        {
-            "id": "reviewer",
-            "description": "Reviews modifications, enforces standards, and raises issues.",
-            "entryPoint": "agents/reviewer.py",
-            "defaultModel": "gemma2",
-            "tools": [
-                "lint",
-                "diff-analyser"
-            ],
-            "outputs": [
-                "review-notes.md"
-            ],
-            "requires": [
-                "executor"
-            ]
-        },
-        {
-            "id": "diagnostic",
-            "description": "Monitors system health, detects issues, and provides diagnostic data.",
-            "entryPoint": "agents/diagnostic.py",
-            "defaultModel": "phi3.5",
-            "tools": [
-                "monitoring",
-                "logging",
-                "alerting"
-            ],
-            "outputs": [
-                "diagnostic-report.md"
-            ],
-            "requires": [
-                "reviewer"
-            ]
-        },
-        {
-            "id": "communication",
-            "description": "Handles external communication and feedback collection via Telegram/Discord.",
-            "entryPoint": "agents/communication.py",
-            "defaultModel": "llama3.2:latest",
-            "tools": [
-                "telegram_bot",
-                "discord_bot",
-                "message_parsing"
-            ],
-            "outputs": [
-                "feedback-summary.md"
-            ],
-            "requires": [
-                "diagnostic"
-            ]
-        }
-    ],
-    "workflow": [
-        {
-            "from": "planner",
-            "to": "executor",
-            "artifact": "plan.md"
-        },
-        {
-            "from": "executor",
-            "to": "reviewer",
-            "artifact": "patches"
-        },
-        {
-            "from": "reviewer",
-            "to": "diagnostic",
-            "artifact": "review-notes.md"
-        },
-        {
-            "from": "diagnostic",
-            "to": "communication",
-            "artifact": "diagnostic-report.md"
-        }
-    ],
-    "monitoring": {
-        "metrics": [
-            "latency",
-            "success-rate",
-            "resource-usage"
-        ],
-        "logLevel": "info",
-        "retentionDays": 7
+    "azure-ai-foundry": {
+      "gpt-4o": {
+        "endpointEnv": "AZURE_OPENAI_ENDPOINT",
+        "deploymentEnv": "AZURE_OPENAI_CHAT_DEPLOYMENT_NAME",
+        "credential": "entra-id"
+      }
     }
+  },
+  "agents": [
+    {
+      "id": "planner",
+      "description": "Analyses backlog entries and produces ordered work plans.",
+      "entryPoint": "agents/planner.py",
+      "defaultModel": "llama3.2:latest",
+      "tools": [
+        "task-registry",
+        "documentation-index"
+      ],
+      "outputs": [
+        "plan.md"
+      ],
+      "requires": [
+        "docs/tasks"
+      ]
+    },
+    {
+      "id": "executor",
+      "description": "Implements code changes based on planner directives.",
+      "entryPoint": "agents/executor.py",
+      "defaultModel": "deepseek-coder:6.7b",
+      "tools": [
+        "git",
+        "tests"
+      ],
+      "outputs": [
+        "patches",
+        "test-report.md"
+      ],
+      "requires": [
+        "planner"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "description": "Reviews modifications, enforces standards, and raises issues.",
+      "entryPoint": "agents/reviewer.py",
+      "defaultModel": "gemma2",
+      "tools": [
+        "lint",
+        "diff-analyser"
+      ],
+      "outputs": [
+        "review-notes.md"
+      ],
+      "requires": [
+        "executor"
+      ]
+    },
+    {
+      "id": "diagnostic",
+      "description": "Monitors system health, detects issues, and provides diagnostic data.",
+      "entryPoint": "agents/diagnostic.py",
+      "defaultModel": "phi3.5",
+      "tools": [
+        "monitoring",
+        "logging",
+        "alerting"
+      ],
+      "outputs": [
+        "diagnostic-report.md"
+      ],
+      "requires": [
+        "reviewer"
+      ]
+    },
+    {
+      "id": "communication",
+      "description": "Handles external communication and feedback collection via Telegram/Discord.",
+      "entryPoint": "agents/communication.py",
+      "defaultModel": "llama3.2:latest",
+      "tools": [
+        "telegram_bot",
+        "discord_bot",
+        "message_parsing"
+      ],
+      "outputs": [
+        "feedback-summary.md"
+      ],
+      "requires": [
+        "diagnostic"
+      ]
+    }
+  ],
+  "workflow": [
+    {
+      "from": "planner",
+      "to": "executor",
+      "artifact": "plan.md"
+    },
+    {
+      "from": "executor",
+      "to": "reviewer",
+      "artifact": "patches"
+    },
+    {
+      "from": "reviewer",
+      "to": "diagnostic",
+      "artifact": "review-notes.md"
+    },
+    {
+      "from": "diagnostic",
+      "to": "communication",
+      "artifact": "diagnostic-report.md"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project_1761953754",
+      "name": "InsightForge",
+      "markdown": "# Especificación de Proyecto: InsightForge - Herramienta Específica para Extracción de Insights en Agentes IA\n\n## 1. Introducción\n\n### 1.1 Descripción General\n**InsightForge** es una herramienta específica y dedicada diseñada para entornos de inteligencia artificial local, enfocada en la extracción automatizada de insights accionables a partir de datos no estructurados o semi-estructurados. Esta herramienta permite a los agentes IA procesar entradas diversas —como textos, logs, datasets CSV/JSON o incluso capturas de pantalla locales— para identificar patrones, anomalías y recomendaciones clave, todo en tiempo real y de manera local.\n\nEl valor principal de InsightForge radica en su utilidad futura para funciones de agentes en escenarios complejos: acelera la toma de decisiones en ciclos de planificación y revisión, reduce el tiempo de análisis manual en un 50-70%, y se integra seamless como un módulo invocable. Por ejemplo, un agente podría usarla para analizar logs de ejecución y extraer \"lecciones aprendidas\" para optimizar planes futuros. Como herramienta específica (no generadora dinámica), se construye con funcionalidades fijas pero altamente configurables, priorizando robustez y privacidad en desarrollo local.\n\nTodo el desarrollo, pruebas y ejecución se realiza en entornos locales (e.g., máquinas personales o servidores locales), sin dependencias en servicios cloud.\n\n### 1.2 Alcance\n- **Enfoque central**: Implementación completa de InsightForge como módulo independiente, con capacidades de procesamiento, extracción y reporting de insights.\n- **Exclusiones**: No incluye generación dinámica de otras herramientas ni integración con datos externos en tiempo real (procesamiento local exclusivo).\n- **Duración estimada**: 2-4 meses para MVP (Minimum Viable Product).\n\n## 2. Objetivos\n\n### 2.1 Objetivos Principales\n- Desarrollar InsightForge para extraer insights con precisión >85% en datasets locales variados, midiendo relevancia y accionabilidad mediante métricas internas.\n- Asegurar integración autónoma en flujos de agentes, con triggers simples (e.g., vía API local) para invocación en fases de revisión o diagnóstico.\n- Producir un deliverable reutilizable: un paquete instalable que permita a agentes futuros usarla para escalar análisis en tareas como optimización de workflows o simulación predictiva.\n\n### 2.2 Objetivos Secundarios\n- Validar InsightForge en casos locales reales, como extracción de insights de logs de ejecución de agentes para identificar bottlenecks.\n- Documentar exhaustivamente para adopción en setups locales de IA (e.g., compatible con LangChain offline o scripts Python simples).\n\n## 3. Arquitectura de InsightForge\n\n### 3.1 Visión General\nInsightForge se estructura como un **módulo Python autónomo y local**, con un flujo fijo: **Ingestión → Procesamiento → Extracción → Reporting**. Utiliza bibliotecas locales para NLP y análisis (e.g., spaCy offline, scikit-learn), procesando datos en memoria o filesystem local. Las salidas son reports estructurados (JSON) con insights priorizados, listos para integración en agentes.\n\nDiagrama conceptual (en formato textual):\n```\n[Input: Datos Locales (TXT/CSV/JSON/Logs)] --> [Ingestor] --> [Procesador (NLP + ML Local)]\n                                      |                                |\n                                      v                                v\n                           [Extractor de Insights] --> [Priorizador]\n                                      |                                |\n                                      v                                |\n                           [Reporter (JSON/HTML Local)] <-- [Validador]\n                                      |\n                                      v\n[Output: Insights Accionables (e.g., \"Patrón detectado: 70% de fallos por latencia >5s\")]\n```\n\n### 3.2 Componentes Principales\nInsightForge se divide en módulos fijos, ejecutados localmente.\n\n| Componente              | Descripción                                                                 | Entradas/Salidas Principales                  | Tecnologías Sugeridas                  |\n|-------------------------|-----------------------------------------------------------------------------|-----------------------------------------------|----------------------------------------|\n| **Ingestor**           | Carga y preprocesa datos locales de múltiples formatos (e.g., normaliza texto, maneja encodings). | Entrada: Archivo/Ruta<br>Salida: Datos limpios (DataFrame) | Pandas + spaCy para tokenización local |\n| **Procesador**         | Aplica técnicas de análisis base: embedding semántico, clustering y detección de anomalías. | Entrada: Datos limpios<br>Salida: Features vectorizadas | scikit-learn + Sentence Transformers (offline) |\n| **Extractor de Insights** | Identifica patrones clave (e.g., correlaciones, temas recurrentes) usando reglas heurísticas + ML simple. | Entrada: Features<br>Salida: Candidatos de insights (lista) | Custom rules + TF-IDF local           |\n| **Priorizador**        | Ordena insights por impacto (e.g., frecuencia, severidad) y filtra ruido. | Entrada: Candidatos<br>Salida: Insights top-N | Scoring heurístico con NumPy          |\n| **Reporter**            | Genera outputs legibles: JSON para integración, HTML simple para visualización local. | Entrada: Insights priorizados<br>Salida: Report estructurado | Jinja2 para templates locales         |\n\n### 3.3 Mecanismo de Funcionamiento\n- **Proceso Fijo**: Input datos → Ingestor carga → Procesador analiza → Extractor genera candidatos → Priorizador rankea → Reporter exporta.\n- **Ejemplo de Uso**: Input: Logs de un agente (TXT local). Output: Insights como [\"Recomendación: Optimizar Executor para queries SQL – reduce latencia en 40% basado en 15 fallos similares\"].\n- **Configurabilidad**: Parámetros como `n_insights=5` o `focus='anomalies'` para adaptación sin recodificación.\n- **Seguridad**: Procesamiento 100% local, sin I/O externo; validación de inputs para prevenir overflows.\n\n## 4. Requisitos Funcionales\n\n### 4.1 Flujos Principales\n1. **Procesamiento Inicial**: Recibe ruta de archivo → Produce report de insights en <20s.\n2. **Integración en Agente**: API simple (e.g., `insightforge.process(data_path, config)`) para invocación en Reviewer/Diagnoser.\n3. **Reporting Personalizado**: Opciones para exportar en JSON (para parsing) o HTML (para revisión humana local).\n4. **Mantenimiento**: Función de logging interno para auto-mejora (e.g., track precisión histórica).\n\n### 4.2 Casos de Uso\n- **Caso Principal**: Análisis de logs de ejecución de agentes para extraer insights sobre ineficiencias, útil en futuras iteraciones de planificación.\n- **Caso Futuro**: Procesamiento de datasets de simulación local para identificar tendencias predictivas en escenarios multi-agente.\n\n## 5. Requisitos No Funcionales\n\n### 5.1 Rendimiento\n- Tiempo de procesamiento: <20s por 10MB de datos en hardware local estándar (e.g., CPU i5+).\n- Capacidad: Manejo de hasta 1GB de datos en memoria sin crasheo.\n\n### 5.2 Seguridad y Confiabilidad\n- Procesamiento aislado: Usa context managers para manejo de archivos.\n- Manejo de Errores: Graceful fallbacks (e.g., si ML falla, usa rules básicas).\n- Logging: Registros detallados en archivos locales para debugging.\n\n### 5.3 Usabilidad\n- CLI intuitiva (e.g., `insightforge --input logs.txt --output report.json --focus patterns`).\n- Documentación con ejemplos en Jupyter notebooks locales.\n\n## 6. Tecnologías y Stack\nPara evitar desviaciones en el desarrollo, se definen herramientas y versiones exactas. Todas las dependencias deben instalarse vía `requirements.txt` generado con `pip freeze` en un entorno virtual limpio. Se recomienda usar `virtualenv` versión 20.25.0 para aislamiento.\n\n| Categoría             | Herramienta/Biblioteca | Versión Exacta | Justificación |\n|-----------------------|------------------------|----------------|---------------|\n| **Lenguaje Principal** | Python | 3.10.12 | Estabilidad y compatibilidad con bibliotecas de ML locales; no superior a 3.11 para evitar breaking changes en dependencias. |\n| **Análisis Local**    | spaCy | 3.7.2 | Procesamiento NLP offline robusto; modelo requerido: `en_core_web_sm-3.7.1` (descargado manualmente). |\n| **Análisis Local**    | scikit-learn | 1.3.2 | Clustering y detección de anomalías estables; compatible con NumPy 1.24.4. |\n| **Análisis Local**    | Pandas | 2.1.4 | Manejo de DataFrames para ingestión; depende de NumPy 1.24.4. |\n| **Embeddings**        | sentence-transformers | 2.2.2 | Embeddings semánticos offline; modelo requerido: `all-MiniLM-L6-v2` (pre-descargado). |\n| **Matemáticas Base**  | NumPy | 1.24.4 | Cálculos vectorizados en priorizador; versión pinned para compatibilidad. |\n| **Almacenamiento**    | JSON (nativo Python) | - | Serialización de outputs sin dependencias externas. |\n| **Testing**           | pytest | 7.4.4 | Pruebas unitarias y de integración locales. |\n| **Visualización**     | Matplotlib | 3.8.2 | Gráficos en reports HTML locales; backend: Agg para no-GUI. |\n| **Templates**         | Jinja2 | 3.1.2 | Generación de reports HTML simples. |\n| **Entorno Virtual**   | virtualenv | 20.25.0 | Creación de entornos aislados: `virtualenv -p python3.10.12 venv`. |\n\n**Notas de Instalación**:\n- Crear `requirements.txt` con: `pip install --upgrade pip==23.3.1 && pip install [lista arriba] && pip freeze > requirements.txt`.\n- Modelos offline: Descargar manualmente spaCy (`python -m spacy download en_core_web_sm==3.7.1`) y Sentence Transformers (pre-cargar modelo en código).\n- Prohibido: Cualquier `pip install` en runtime; todas las dependencias fijas en setup.\n\n## 7. Plan de Implementación\n\n### 7.1 Fases\n1. **Fase 1: Diseño (Semanas 1-2)**: Definir flujos y prototipo de Ingestor/Procesador, usando versiones exactas.\n2. **Fase 2: Desarrollo Core (Semanas 3-6)**: Implementar Extractor y Priorizador; pruebas con datasets sintéticos locales.\n3. **Fase 3: Integración y Testing (Semanas 7-9)**: Reporter y API; validar precisión en casos reales con pytest 7.4.4.\n4. **Fase 4: Optimización y Documentación (Semanas 10-12)**: CLI, notebooks y pulido, verificando compatibilidad de versiones.\n5. **Fase 5: MVP Final (Semanas 13-16)**: Benchmarks locales y paquete instalable con pinned deps.\n\n### 7.2 Recursos\n- **Equipo**: 1 Desarrollador (foco en ML local y Python).\n- **Presupuesto Estimado**: Mínimo (open-source); ~$100 para datasets de prueba locales si necesario.\n- **Riesgos**: Incompatibilidades de versiones → Mitigación: Testing en CI local con tox 4.11.4 (agregar a requirements si se usa).\n\n## 8. Métricas de Éxito\n- Precisión de insights (manual review): >85% en 10 pruebas locales.\n- Reducción de tiempo de análisis: >50% vs. métodos manuales en benchmarks.\n- Facilidad de integración: >90% de invocaciones exitosas en scripts de prueba, con zero desvio de versiones.\n\n## 9. Anexos\n- **Glosario**: InsightForge (Herramienta para extracción de insights), NLP Local (Procesamiento de lenguaje natural offline).\n- **Referencias**: Basado en técnicas de data mining (e.g., inspirado en herramientas como Orange local).\n- **Contacto**: Para refinamientos, contactar al lead developer.",
+      "base_path": "D:\\InsightForge",
+      "created_at": "2025-11-01T00:35:54.228306",
+      "status": "running",
+      "execution_id": "project_1761953754"
+    }
+  ],
+  "monitoring": {
+    "metrics": [
+      "latency",
+      "success-rate",
+      "resource-usage"
+    ],
+    "logLevel": "info",
+    "retentionDays": 7
+  }
 }
