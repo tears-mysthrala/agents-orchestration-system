@@ -1,0 +1,132 @@
+"""
+API web para controlar y monitorizar agentes.
+
+Proporciona endpoints para:
+- Listar agentes
+- Ver estado de agentes
+- Ejecutar agentes y workflows
+- Gestionar configuración de agentes
+"""
+
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import json
+from typing import Dict, Any
+from pathlib import Path
+from orchestration.coordinator import AgentCoordinator
+
+app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
+
+# Path al archivo de configuración
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
+
+# Instancia del coordinador
+coordinator = AgentCoordinator()
+
+
+def load_config() -> Dict[str, Any]:
+    """Carga la configuración de agentes."""
+    if not CONFIG_PATH.exists():
+        raise HTTPException(status_code=500, detail="Config file not found")
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_config(config: Dict[str, Any]):
+    """Guarda la configuración de agentes."""
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
+@app.get("/")
+async def root():
+    """Sirve la interfaz web principal."""
+    return FileResponse("web/static/index.html")
+
+
+@app.get("/api/agents")
+async def get_agents():
+    """Lista todos los agentes configurados."""
+    config = load_config()
+    return {"agents": config.get("agents", [])}
+
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: str):
+    """Obtiene detalles de un agente específico."""
+    config = load_config()
+    agents = config.get("agents", [])
+    agent = next((a for a in agents if a["id"] == agent_id), None)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@app.post("/api/agents")
+async def add_agent(agent: Dict[str, Any]):
+    """Añade un nuevo agente a la configuración."""
+    config = load_config()
+    agents = config.get("agents", [])
+    # Verificar que no exista ya
+    if any(a["id"] == agent["id"] for a in agents):
+        raise HTTPException(status_code=400, detail="Agent ID already exists")
+    agents.append(agent)
+    config["agents"] = agents
+    save_config(config)
+    return {"message": "Agent added successfully"}
+
+
+@app.put("/api/agents/{agent_id}")
+async def update_agent(agent_id: str, agent: Dict[str, Any]):
+    """Actualiza un agente existente."""
+    config = load_config()
+    agents = config.get("agents", [])
+    for i, a in enumerate(agents):
+        if a["id"] == agent_id:
+            agents[i] = agent
+            save_config(config)
+            return {"message": "Agent updated successfully"}
+    raise HTTPException(status_code=404, detail="Agent not found")
+
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    """Elimina un agente de la configuración."""
+    config = load_config()
+    agents = config.get("agents", [])
+    agents = [a for a in agents if a["id"] != agent_id]
+    config["agents"] = agents
+    save_config(config)
+    return {"message": "Agent deleted successfully"}
+
+
+@app.get("/api/workflows")
+async def get_workflows():
+    """Lista los workflows configurados."""
+    config = load_config()
+    return {"workflows": config.get("workflow", [])}
+
+
+@app.post("/api/workflows/{workflow_id}/execute")
+async def execute_workflow(workflow_id: str):
+    """Ejecuta un workflow completo."""
+    try:
+        execution = coordinator.execute_workflow(workflow_id=workflow_id)
+        return {
+            "message": f"Workflow {workflow_id} execution started",
+            "execution_id": execution.workflow_id,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/{agent_id}/execute")
+async def execute_agent(agent_id: str):
+    """Ejecuta un agente individual."""
+    # TODO: Implementar ejecución individual
+    return {"message": f"Agent {agent_id} execution started"}
+
+
+# Montar archivos estáticos
+app.mount("/static", StaticFiles(directory="web/static"), name="static")

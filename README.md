@@ -29,6 +29,8 @@ Proyecto para definir, construir y operar agentes de desarrollo que trabajen en 
 - `config/agents.config.json`: plantilla de configuracion comun para agentes y modelos.
 - `scripts/setup.ps1`: aprovisiona dependencias y entorno virtual.
 - `scripts/run-agents.ps1`: ejemplo de orquestacion basica para lanzar agentes definidos en la configuracion.
+- `scripts/run_web.py`: script para ejecutar la interfaz web de control y monitoreo.
+- `web/`: módulo con la API FastAPI y interfaz web para gestionar agentes.
 - `docs/operations/playbook.md`: respuesta operativa y escalamiento.
 
 ### Hoja de ruta resumida
@@ -82,6 +84,23 @@ Proyecto para definir, construir y operar agentes de desarrollo que trabajen en 
 - Automatiza la configuracion inicial con scripts (`setup.ps1`, `Makefile`) que creen entornos, instalen dependencias y descarguen modelos.
 - Documenta en este README las combinaciones de modelos probadas, consumo de recursos y cualquier ajuste especifico (por ejemplo, limites de tokens o planificacion de tareas).
 - Monitoriza uso de hardware con herramientas como `htop`, `nvidia-smi` o el Monitor de recursos de Windows para detectar cuellos de botella al correr agentes en paralelo.
+
+### Interfaz Web
+
+El proyecto incluye una interfaz web para controlar y monitorizar los agentes de forma interactiva.
+
+- **Ejecutar la interfaz**: `.venv\Scripts\Activate.ps1; python scripts/run_web.py` (desde el directorio raíz)
+- **Acceder**: Abre `http://127.0.0.1:8000` en tu navegador
+- **Funcionalidades**:
+  - Ver lista de agentes configurados
+  - Añadir nuevos agentes a la configuración
+  - Modificar agentes existentes
+  - Ejecutar workflows completos
+  - Ver estado de ejecuciones (en desarrollo)
+
+La interfaz utiliza FastAPI para el backend y una interfaz HTML/JS simple para el frontend.
+
+### Buenas prácticas adicionales
 
 ## 🤝 Cómo contribuir
 
