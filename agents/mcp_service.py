@@ -18,6 +18,8 @@ import sys
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+import time
 import uvicorn
 import asyncio
 import requests
@@ -29,15 +31,23 @@ import json
 # Ensure package imports work when executed from project root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents.planner import PlannerAgent
-from agents.executor import ExecutorAgent
-from agents.reviewer import ReviewerAgent
+
+# Agent classes are imported lazily in main() to avoid importing heavy ML/RAG
+def _make_lazy_agent(module_path: str, class_name: str):
+    def _lazy_factory(config_path: str = "config/agents.config.json"):
+        # Import the real agent class only when instantiated
+        mod = __import__(module_path, fromlist=[class_name])
+        AgentCls = getattr(mod, class_name)
+        return AgentCls(config_path=config_path)
+
+    # Return a callable that acts like a class (callable to construct instance)
+    return _lazy_factory
 
 
 AGENT_MAP = {
-    "planner": PlannerAgent,
-    "executor": ExecutorAgent,
-    "reviewer": ReviewerAgent,
+    "planner": _make_lazy_agent("agents.planner", "PlannerAgent"),
+    "executor": _make_lazy_agent("agents.executor", "ExecutorAgent"),
+    "reviewer": _make_lazy_agent("agents.reviewer", "ReviewerAgent"),
 }
 
 
@@ -64,62 +74,72 @@ def create_app(
     # Heartbeat task holder
     app.state._heartbeat_task = None
     app.state._lifecycle = {"status": "running", "current_task": None}
+    # Flag indicates a graceful shutdown/restart has been requested. When True,
+    # the service should not accept new execute requests and should drain
+    # existing work before exiting or restarting.
+    app.state._shutdown_requested = False
 
-    @app.on_event("startup")
-    async def _register_and_start_heartbeat():
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        """Lifespan context: register with manager and start heartbeat loop."""
         mgr = manager_url
-        if not mgr:
-            return
-        register_url = mgr.rstrip("/") + "/api/agent-services/register"
-        hb_url = mgr.rstrip("/") + "/api/agent-services/heartbeat"
-
-        payload = {
-            "id": app.state._agent_info["id"],
-            "serviceUrl": app.state._agent_info["service_url"],
-            "metadata": app.state._agent_info.get("metadata", {}),
-        }
-
+        hb_task = None
         try:
-            async with httpx.AsyncClient() as client:
-                await client.post(register_url, json=payload, timeout=2.0)
-        except Exception:
-            print(f"Warning: could not register service to manager at {mgr}")
+            if mgr:
+                register_url = mgr.rstrip("/") + "/api/agent-services/register"
+                hb_url = mgr.rstrip("/") + "/api/agent-services/heartbeat"
 
-        async def _heartbeat_loop():
-            while True:
+                payload = {
+                    "id": app.state._agent_info["id"],
+                    "serviceUrl": app.state._agent_info["service_url"],
+                    "metadata": app.state._agent_info.get("metadata", {}),
+                }
+
                 try:
                     async with httpx.AsyncClient() as client:
-                        await client.post(hb_url, json=payload, timeout=2.0)
+                        await client.post(register_url, json=payload, timeout=2.0)
                 except Exception:
-                    # Best-effort; ignore failures
-                    pass
-                await asyncio.sleep(10)
+                    print(f"Warning: could not register service to manager at {mgr}")
 
-        # start background heartbeat
-        app.state._heartbeat_task = asyncio.create_task(_heartbeat_loop())
+                async def _heartbeat_loop():
+                    while True:
+                        try:
+                            async with httpx.AsyncClient() as client:
+                                await client.post(hb_url, json=payload, timeout=2.0)
+                        except Exception:
+                            # Best-effort; ignore failures
+                            pass
+                        await asyncio.sleep(10)
 
-    @app.on_event("shutdown")
-    async def _shutdown_unregister():
-        mgr = manager_url
-        if not mgr:
-            return
-        unregister_url = mgr.rstrip("/") + "/api/agent-services/unregister"
-        payload = {"id": app.state._agent_info["id"]}
+                hb_task = asyncio.create_task(_heartbeat_loop())
 
-        # cancel heartbeat task
-        task = app.state._heartbeat_task
-        if task:
-            task.cancel()
+            app.state._heartbeat_task = hb_task
+            yield
+        finally:
+            # shutdown: cancel heartbeat and unregister
             try:
-                await task
+                task = app.state._heartbeat_task
+                if task:
+                    task.cancel()
+                    try:
+                        await task
+                    except Exception:
+                        pass
+
+                if mgr:
+                    unregister_url = mgr.rstrip("/") + "/api/agent-services/unregister"
+                    payload = {"id": app.state._agent_info["id"]}
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            await client.post(unregister_url, json=payload, timeout=2.0)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(unregister_url, json=payload, timeout=2.0)
-        except Exception:
-            pass
+    app.router.lifespan_context = _lifespan
+
+    # lifespan takes care of shutdown/unregister
 
     @app.get("/health")
     async def health():
@@ -137,9 +157,12 @@ def create_app(
     async def execute(req: Dict[str, Any]):
         # Run the agent.execute in a thread to avoid blocking the event loop
         try:
-            # Respect lifecycle pause/resume
+            # Respect lifecycle pause/resume/stop
             if app.state._lifecycle.get("status") == "paused":
                 raise HTTPException(status_code=409, detail="Agent is paused")
+            if app.state._shutdown_requested or app.state._lifecycle.get("status") == "stopping":
+                # Reject new work while we're shutting down/restarting
+                raise HTTPException(status_code=409, detail="Agent is stopping")
 
             params = req.get("parameters", {}) if isinstance(req, dict) else {}
             loop = asyncio.get_running_loop()
@@ -173,28 +196,62 @@ def create_app(
             return {"message": "resumed"}
 
         if action == "stop":
-            # Best-effort graceful shutdown: return response then exit process
-            def _delayed_exit():
+            # Request graceful shutdown: set flag and wait for current task to
+            # finish before exiting. We return immediately to the caller and
+            # perform the blocking wait in a daemon thread so the response is
+            # delivered quickly.
+            app.state._shutdown_requested = True
+            app.state._lifecycle["status"] = "stopping"
+
+            def _drain_and_exit():
                 try:
-                    # small delay to allow response to be sent
-                    threading.Event().wait(0.5)
+                    # Wait for current task to clear (or timeout after 30s)
+                    start = time.time()
+                    while True:
+                        cur = app.state._lifecycle.get("current_task")
+                        if cur is None:
+                            break
+                        if time.time() - start > 30:
+                            break
+                        time.sleep(0.1)
                 finally:
+                    # Force exit; use os._exit to avoid complex teardown ordering
                     os._exit(0)
 
-            threading.Thread(target=_delayed_exit, daemon=True).start()
+            threading.Thread(target=_drain_and_exit, daemon=True).start()
             return {"message": "stopping"}
 
         if action == "restart":
-            # Best-effort restart using execv; may not work in all environments
-            try:
-                python = sys.executable
-                args = [python] + sys.argv
-                threading.Thread(
-                    target=lambda: os.execv(python, args), daemon=True
-                ).start()
-                return {"message": "restarting"}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Could not restart: {e}")
+            # Graceful restart: mark shutdown requested, wait for current task
+            # to finish (with timeout), then execv to replace the process.
+            app.state._shutdown_requested = True
+            app.state._lifecycle["status"] = "stopping"
+
+            def _drain_and_exec():
+                try:
+                    start = time.time()
+                    while True:
+                        cur = app.state._lifecycle.get("current_task")
+                        if cur is None:
+                            break
+                        if time.time() - start > 30:
+                            break
+                        time.sleep(0.1)
+
+                    python = sys.executable
+                    args = [python] + sys.argv
+                    # Replace the current process image with a new one.
+                    os.execv(python, args)
+                except Exception:
+                    # If execv fails, make sure the process still exits so we
+                    # don't leave an unstable service running.
+                    try:
+                        os._exit(1)
+                    except Exception:
+                        pass
+
+            threading.Thread(target=_drain_and_exec, daemon=True).start()
+            return {"message": "restarting"}
 
         raise HTTPException(status_code=400, detail="Unsupported action")
 
@@ -240,16 +297,54 @@ def main():
         default="http://127.0.0.1:8000",
         help="URL of the web manager to register this service",
     )
+    parser.add_argument(
+        "--dummy",
+        action="store_true",
+        help="Run a lightweight dummy agent (no ML/RAG dependencies)",
+    )
     args = parser.parse_args()
 
     agent_id = args.agent_id
-    AgentCls = AGENT_MAP.get(agent_id)
-    if AgentCls is None:
-        print(f"Unknown agent id: {agent_id}. Supported: {list(AGENT_MAP.keys())}")
-        raise SystemExit(2)
+    # If requested, run a dummy lightweight agent (no ML/RAG deps)
+    if getattr(args, "dummy", False):
 
-    # Instantiate agent
-    agent = AgentCls(config_path=args.config)
+        class DummyAgent:
+            def __init__(self, aid: str):
+                self.agent_config = {
+                    "id": aid,
+                    "name": f"dummy-{aid}",
+                    "defaultModel": "dummy",
+                }
+
+            def execute(self, params=None):
+                return {"ok": True, "dummy": True, "params": params}
+
+        agent = DummyAgent(agent_id)
+    else:
+        # Lazy import of real agent classes to avoid importing heavy deps at module import
+        try:
+            from agents.planner import PlannerAgent
+            from agents.executor import ExecutorAgent
+            from agents.reviewer import ReviewerAgent
+        except Exception as e:
+            print(f"Error importing agent classes: {e}")
+            raise
+
+        AGENT_MAP.update(
+            {
+                "planner": PlannerAgent,
+                "executor": ExecutorAgent,
+                "reviewer": ReviewerAgent,
+            }
+        )
+
+        AgentCls = AGENT_MAP.get(agent_id)
+        if AgentCls is None:
+            print(f"Unknown agent id: {agent_id}. Supported: {list(AGENT_MAP.keys())}")
+            raise SystemExit(2)
+
+        # Instantiate agent
+        agent = AgentCls(config_path=args.config)
 
     app = create_app(agent)
 

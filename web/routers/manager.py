@@ -227,6 +227,47 @@ async def logs_on_agent(agent_id: str, lines: int = 200):
     return resp.json()
 
 
+@router.get("/{agent_id}/status")
+async def status_on_agent(agent_id: str):
+    cfg = load_config()
+    agents = cfg.get("agents", [])
+    idx = next((i for i, a in enumerate(agents) if a.get("id") == agent_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Agent not found in config")
+
+    agent_cfg = agents[idx]
+    registered = REGISTERED_SERVICES.get(agent_cfg.get("id"))
+    if registered:
+        service_url = registered.get("serviceUrl")
+        url = service_url.rstrip("/") + "/status" if service_url else None
+    else:
+        cfg_port = agent_cfg.get("port")
+        if cfg_port:
+            url = f"http://127.0.0.1:{cfg_port}/status"
+        else:
+            url = _agent_service_url(idx) + "/status"
+
+    if not url:
+        cfg_port = agent_cfg.get("port")
+        if cfg_port:
+            url = f"http://127.0.0.1:{cfg_port}/status"
+        else:
+            url = _agent_service_url(idx) + "/status"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.get(url)
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=503, detail=f"Error contacting agent service: {e}"
+            )
+
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+
+    return resp.json()
+
+
 @router.post("/register")
 async def register_service(body: Dict[str, Any]):
     """Register an agent service so manager can route to it.

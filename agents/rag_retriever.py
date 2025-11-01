@@ -9,11 +9,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
-from langchain_community.embeddings import SentenceTransformerEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# Delay heavy imports until runtime to avoid hard test-time dependencies
 
 
 class RAGRetriever:
@@ -49,11 +45,25 @@ class RAGRetriever:
     def _initialize_embeddings(self):
         """Inicializar el modelo de embeddings."""
         if self.embedding_provider == "openai":
+            try:
+                from langchain_openai import OpenAIEmbeddings
+            except Exception as e:
+                raise ImportError(
+                    "OpenAIEmbeddings not available. Install 'langchain-openai' and set OPENAI_API_KEY"
+                ) from e
+
             return OpenAIEmbeddings(
                 model="text-embedding-ada-002",
                 openai_api_key=os.getenv("OPENAI_API_KEY"),
             )
         elif self.embedding_provider == "sentence-transformers":
+            try:
+                from langchain_community.embeddings import SentenceTransformerEmbeddings
+            except Exception as e:
+                raise ImportError(
+                    "Could not import sentence-transformers embeddings. Install 'sentence-transformers' and related packages."
+                ) from e
+
             return SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
         else:
             raise ValueError(
@@ -65,6 +75,13 @@ class RAGRetriever:
         if self.vector_store_path.exists():
             try:
                 if (self.vector_store_path / "index.faiss").exists():
+                    try:
+                        from langchain_community.vectorstores import FAISS
+                    except Exception as e:
+                        raise ImportError(
+                            "FAISS vectorstore not available. Install faiss and langchain-community vectorstores"
+                        ) from e
+
                     self.vectorstore = FAISS.load_local(
                         str(self.vector_store_path),
                         self.embeddings,
@@ -89,6 +106,13 @@ class RAGRetriever:
             print("No se encontraron documentos para indexar.")
             return
 
+        try:
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except Exception as e:
+            raise ImportError(
+                "Text splitter not available. Install 'langchain-text-splitters' or appropriate package"
+            ) from e
+
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
@@ -98,6 +122,13 @@ class RAGRetriever:
         splits = text_splitter.split_documents(documents)
 
         # Usar FAISS por defecto
+        try:
+            from langchain_community.vectorstores import FAISS
+        except Exception as e:
+            raise ImportError(
+                "FAISS vectorstore not available. Install faiss and langchain-community vectorstores"
+            ) from e
+
         self.vectorstore = FAISS.from_documents(
             documents=splits, embedding=self.embeddings
         )
@@ -109,7 +140,7 @@ class RAGRetriever:
             f"Vector store creado con {len(splits)} chunks de {len(documents)} documentos."
         )
 
-    def _load_documents(self) -> List[Document]:
+    def _load_documents(self) -> List[Any]:
         """Cargar documentos desde la carpeta docs."""
         documents = []
 
@@ -129,6 +160,15 @@ class RAGRetriever:
                         content = f.read()
 
                     # Crear documento con metadata
+                    try:
+                        from langchain_core.documents import Document
+                    except Exception:
+                        # Fallback simple object when langchain Document unavailable
+                        class Document:
+                            def __init__(self, page_content, metadata=None):
+                                self.page_content = page_content
+                                self.metadata = metadata or {}
+
                     doc = Document(
                         page_content=content,
                         metadata={
@@ -214,7 +254,7 @@ class RAGRetriever:
             print(f"Error en búsqueda con scores: {e}")
             return []
 
-    def add_documents(self, documents: List[Document]):
+    def add_documents(self, documents: List[Any]):
         """Agregar nuevos documentos al vector store.
 
         Args:
@@ -224,11 +264,17 @@ class RAGRetriever:
             self._create_vectorstore()
             return
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
-        )
+        try:
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except Exception:
+            # If not available, assume documents are already split
+            splits = documents
+        else:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
+            )
+            splits = text_splitter.split_documents(documents)
 
-        splits = text_splitter.split_documents(documents)
         self.vectorstore.add_documents(splits)
 
         # Persistir cambios

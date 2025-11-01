@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -52,9 +53,13 @@ app.include_router(agents_router.router)
 app.include_router(manager_router.router)
 
 
-@app.on_event("startup")
-async def _start_background_tasks():
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """Start background tasks such as registry cleaner for agent services."""
+    task = None
     try:
         # Start the registry cleaner from manager router
         import web.routers.manager as manager_module
@@ -62,9 +67,25 @@ async def _start_background_tasks():
         # Create a background task; it will run until application shutdown
         import asyncio
 
-        asyncio.create_task(manager_module.start_registry_cleaner())
+        task = asyncio.create_task(manager_module.start_registry_cleaner())
+        yield
     except Exception:
         logger.exception("Failed to start registry cleaner background task")
+        yield
+    finally:
+        try:
+            # Cancel the background task on shutdown
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
+app.router.lifespan_context = lifespan
 
 
 # Path al archivo de configuración
