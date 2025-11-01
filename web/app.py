@@ -24,7 +24,16 @@ from datetime import datetime
 # Agregar el directorio padre al path para importar módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestration.coordinator import AgentCoordinator
+# Try to import coordinator (optional for standalone testing)
+try:
+    from orchestration.coordinator import AgentCoordinator
+    coordinator = AgentCoordinator()
+    COORDINATOR_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Coordinator not available: {e}. Running in standalone mode.")
+    coordinator = None
+    COORDINATOR_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -41,9 +50,6 @@ app = FastAPI(
 
 # Path al archivo de configuración
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
-
-# Instancia del coordinador
-coordinator = AgentCoordinator()
 
 
 def load_config() -> Dict[str, Any]:
@@ -177,6 +183,9 @@ async def get_workflows():
 @app.post("/api/workflows/{workflow_id}/execute")
 async def execute_workflow(workflow_id: str):
     """Ejecuta un workflow completo."""
+    if not COORDINATOR_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Coordinator not available")
+    
     try:
         config = load_config()
 
@@ -222,6 +231,9 @@ async def execute_workflow(workflow_id: str):
 @app.post("/api/projects/new")
 async def create_new_project(project: Dict[str, Any]):
     """Crear y ejecutar un nuevo proyecto basado en especificaciones."""
+    if not COORDINATOR_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Coordinator not available")
+    
     try:
         markdown = project.get("markdown", "")
         base_path = project.get("base_path", "")

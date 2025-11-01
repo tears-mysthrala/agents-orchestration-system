@@ -89,16 +89,61 @@ Proyecto para definir, construir y operar agentes de desarrollo que trabajen en 
 
 El proyecto incluye una interfaz web para controlar y monitorizar los agentes de forma interactiva.
 
-- **Ejecutar la interfaz**: `.venv\Scripts\Activate.ps1; python scripts/run_web.py` (desde el directorio raíz)
-- **Acceder**: Abre `http://127.0.0.1:8000` en tu navegador
-- **Funcionalidades**:
-  - Ver lista de agentes configurados
-  - Añadir nuevos agentes a la configuración
-  - Modificar agentes existentes
-  - Ejecutar workflows completos
-  - Ver estado de ejecuciones (en desarrollo)
+#### Inicio Rápido
 
-La interfaz utiliza FastAPI para el backend y una interfaz HTML/JS simple para el frontend.
+```bash
+# Activar entorno virtual e instalar dependencias
+.venv\Scripts\Activate.ps1  # Windows
+source .venv/bin/activate    # Linux/Mac
+pip install -r requirements.txt
+
+# Ejecutar el servidor web
+uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
+
+# O usar el script proporcionado
+python scripts/run_web.py
+```
+
+#### Acceso
+
+- **API Principal**: `http://127.0.0.1:8000`
+- **Dashboard en Tiempo Real**: `http://127.0.0.1:8000/static/dashboard.html`
+- **Documentación API**: `http://127.0.0.1:8000/docs`
+- **Interfaz Original**: `http://127.0.0.1:8000/static/index.html`
+
+#### Dashboard en Tiempo Real (Nuevo)
+
+El nuevo dashboard proporciona monitoreo en tiempo real de los agentes mediante WebSocket:
+
+- **Métricas en vivo**: Agentes totales, activos, tareas pendientes y completadas
+- **Tabla de agentes**: Estado actual, tareas asignadas, métricas de rendimiento
+- **Control de agentes**: Botones para pausar, reanudar, detener y reiniciar agentes
+- **Logs en vivo**: Stream de eventos y logs de los agentes en tiempo real
+- **Actualizaciones automáticas**: La interfaz se actualiza automáticamente vía WebSocket
+
+![Dashboard Screenshot](https://github.com/user-attachments/assets/7400abde-083e-41a2-b69a-e808ca1eff36)
+
+#### API REST y WebSocket
+
+**Endpoints principales:**
+
+- `GET /health` - Health check del servicio
+- `GET /metrics` - Métricas básicas del sistema
+- `GET /api/agents` - Lista de agentes con estado en tiempo real
+- `GET /api/agents/{agent_id}` - Detalle de un agente específico
+- `POST /api/agents/{agent_id}/action` - Ejecutar acciones (pause, resume, stop, restart, prioritize)
+- `WS /api/agents/ws` - WebSocket para actualizaciones en tiempo real
+
+**Acciones disponibles:**
+- `pause` - Pausar un agente en ejecución
+- `resume` - Reanudar un agente pausado
+- `stop` - Detener un agente
+- `restart` - Reiniciar un agente
+- `prioritize` - Establecer prioridad de un agente
+
+**Documentación completa**: Ver [web/README.md](web/README.md) para ejemplos de uso, testing con curl/wscat, y guía de producción.
+
+La interfaz utiliza FastAPI para el backend, WebSocket para comunicación en tiempo real, y una interfaz HTML/JS reactiva para el frontend.
 
 ### Buenas prácticas adicionales
 
