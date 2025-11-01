@@ -349,12 +349,25 @@ function addLog(level, message) {
     const logEntry = document.createElement('div');
     logEntry.className = 'log-entry';
     
-    const levelClass = `log-${level}`;
-    logEntry.innerHTML = `
-        <span class="log-timestamp">[${timestamp}]</span>
-        <span class="${levelClass}">[${level.toUpperCase()}]</span>
-        ${escapeHtml(message)}
-    `;
+    const levelClass = `log-${escapeHtml(level)}`;
+    
+    // Create elements safely to prevent XSS
+    const timestampSpan = document.createElement('span');
+    timestampSpan.className = 'log-timestamp';
+    timestampSpan.textContent = `[${timestamp}]`;
+    
+    const levelSpan = document.createElement('span');
+    levelSpan.className = levelClass;
+    levelSpan.textContent = `[${level.toUpperCase()}]`;
+    
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;
+    
+    logEntry.appendChild(timestampSpan);
+    logEntry.appendChild(document.createTextNode(' '));
+    logEntry.appendChild(levelSpan);
+    logEntry.appendChild(document.createTextNode(' '));
+    logEntry.appendChild(messageSpan);
     
     logContent.appendChild(logEntry);
     
