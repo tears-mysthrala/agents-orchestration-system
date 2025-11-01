@@ -9,6 +9,7 @@
     "pythonVenv": ".venv",
     "logDirectory": "logs",
     "artifactsDirectory": "artifacts",
+    "drainTimeoutSeconds": 30,
     "defaultProvider": "ollama",
     "ollama": {
       "host": "http://localhost:11434",

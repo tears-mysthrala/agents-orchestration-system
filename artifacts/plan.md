@@ -1,55 +1,43 @@
-### System:
-Planificador de Proyectos
-#### Instrucciones:
-1. Analiza la directriz del usuario
-2. Identifica tareas específicas y dependencias
-3. Prioriza tareas por importancia y secuencia
-4. Estima recursos y tiempo aproximado
-5. Proporciona un plan claro y estructurado
+### Plan de Trabajo para el Proyecto de Desarrollo de Software
 
-#### Formato de Salida:
-- **Objetivo**: Resumen del proyecto
-- **Tareas**: Lista numerada con descripciones
-- **Dependencias**: Relaciones entre tareas
-- **Cronograma**: Estimación temporal
-- **Riesgos**: Posibles obstáculos
+#### Objetivo
+Resumen del proyecto: Desarrollar una plataforma web de gestión de proyectos que permita a los usuarios crear, asignar y seguir el progreso de sus proyectos.
 
-#### Plan de Trabajo:
-### Objetivo
-Desarrollo de una plataforma web para gestión de proyectos
+#### Tareas
+1. **Creación del diseño**: Diseñar la interfaz de usuario y la estructura de la plataforma.
+ * Subtareas:
+ + Investigar tendencias en diseño web actual (10% del tiempo estimado)
+ + Crear un prototipo de la interfaz de usuario (20% del tiempo estimado)
+ + Realizar pruebas de usabilidad y recopilar feedback (15% del tiempo estimado)
+2. **Desarrollo de la base de datos**: Diseñar y implementar la base de datos para almacenar información de los proyectos.
+ * Subtareas:
+ + Investigar opciones de bases de datos (10% del tiempo estimado)
+ + Diseñar la estructura de la base de datos (20% del tiempo estimado)
+ + Implementar la base de datos en el servidor (30% del tiempo estimado)
+3. **Implementación de la funcionalidad**: Implementar las características de la plataforma.
+ * Subtareas:
+ + Crear un sistema de autenticación y autorización (15% del tiempo estimado)
+ + Desarrollar un sistema de gestión de proyectos (25% del tiempo estimado)
+ + Integrar la base de datos con la plataforma (20% del tiempo estimado)
+4. **Pruebas y depuración**: Realizar pruebas y depurar el código.
+ * Subtareas:
+ + Crear un conjunto de pruebas unitarias y de integración (15% del tiempo estimado)
+ + Realizar pruebas de sistema y depurar errores (20% del tiempo estimado)
 
-### Tareas
-1. **Crear base de datos**
- * Desarrollar la estructura de la base de datos utilizando MySQL
- * Implementar las relaciones entre tablas y procedimientos almacenados
-2. **Desarrollar interfaz de usuario**
- * Diseñar la interfaz de usuario utilizando HTML, CSS y JavaScript
- * Implementar las funcionalidades de navegación y búsqueda
-3. **Integrar API con base de datos**
- * Desarrollar una API REST para interactuar con la base de datos
- * Implementar los endpoints para crear, leer, actualizar y eliminar registros
-4. **Implementar autenticación y autorización**
- * Desarrollar un sistema de autenticación utilizando JWT
- * Implementar las reglas de acceso y permisos para los usuarios
-5. **Pruebas y depuración**
- * Realizar pruebas unitarias y de integración para garantizar la funcionalidad
- * Identificar y solucionar los errores y problemas
+#### Dependencias
+* La creación del diseño depende de la investigación de tendencias en diseño web actual.
+* El desarrollo de la base de datos depende de la implementación de la estructura de la base de datos.
+* La implementación de la funcionalidad depende de la creación del sistema de autenticación y autorización.
 
-### Dependencias
-* La creación de la base de datos depende de la implementación de la API con la base de datos.
-* La implementación de la interfaz de usuario depende de la autenticación y autorización.
-* Las pruebas y depuración dependen de la implementación de la API con la base de datos y la interfaz de usuario.
+#### Cronograma
+| Tarea | Tiempo Estimado | Comienzo | Fin |
+| --- | --- | --- | --- |
+| Creación del diseño | 40 horas | Hora 1 | Hora 10 |
+| Desarrollo de la base de datos | 60 horas | Hora 11 | Hora 21 |
+| Implementación de la funcionalidad | 80 horas | Hora 22 | Hora 31 |
+| Pruebas y depuración | 30 horas | Hora 32 | Hora 41 |
 
-### Cronograma
-| Tarea | Estimación de Tiempo | Fecha de Completión |
-| --- | --- | --- |
-| Crear base de datos | 2 días | 2023-02-20 |
-| Desarrollar interfaz de usuario | 4 días | 2023-02-24 |
-| Integrar API con base de datos | 3 días | 2023-02-27 |
-| Implementar autenticación y autorización | 2 días | 2023-03-01 |
-| Pruebas y depuración | 5 días | 2023-03-06 |
-
-### Riesgos
-* El retraso en la implementación de la API con la base de datos puede afectar el funcionamiento de la plataforma.
-* La falta de pruebas y depuración adecuadas puede llevar a errores y problemas en producción.
-* El cambio en las reglas de acceso y permisos puede requerir ajustes en la autenticación y autorización.
+#### Riesgos
+* El proyecto puede estar retrasado debido a la complejidad del diseño.
+* La implementación de la base de datos puede requerir más tiempo de lo estimado.
+* Los errores en el código pueden afectar la estabilidad y seguridad de la plataforma.

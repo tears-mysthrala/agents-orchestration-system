@@ -160,7 +160,10 @@ def create_app(
             # Respect lifecycle pause/resume/stop
             if app.state._lifecycle.get("status") == "paused":
                 raise HTTPException(status_code=409, detail="Agent is paused")
-            if app.state._shutdown_requested or app.state._lifecycle.get("status") == "stopping":
+            if (
+                app.state._shutdown_requested
+                or app.state._lifecycle.get("status") == "stopping"
+            ):
                 # Reject new work while we're shutting down/restarting
                 raise HTTPException(status_code=409, detail="Agent is stopping")
 
