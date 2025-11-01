@@ -48,10 +48,16 @@ class BaseAgent(ABC):
         """Obtener configuración específica del agente. Debe ser implementado por subclases."""
         pass
 
-    @abstractmethod
     def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Any:
-        """Ejecutar la lógica principal del agente. Debe ser implementado por subclases."""
-        pass
+        """Ejecutar la lógica principal del agente.
+
+        Las subclases pueden sobreescribir este método. Por compatibilidad con las
+        pruebas unitarias y para evitar que la clase base sea abstracta en exceso,
+        aquí se ofrece una implementación por defecto que lanza NotImplementedError.
+        """
+        raise NotImplementedError(
+            "Subclasses should implement `execute` when used directly"
+        )
 
     def _load_prompt_template(self) -> str:
         """Cargar template del prompt desde archivo."""
@@ -74,8 +80,19 @@ class BaseAgent(ABC):
         Returns:
             Instancia de LLM configurada
         """
+        # Determinar proveedor a usar: preferir explicit defaultProvider en config,
+        # si no existe, elegir el primer proveedor disponible en la sección runtime.
+        runtime_cfg = self.config.get("runtime", {})
         if provider is None:
-            provider = self.config["runtime"]["defaultProvider"]
+            provider = runtime_cfg.get("defaultProvider")
+            if provider is None:
+                # Elegir el primer key configurado en runtime (por ejemplo 'ollama')
+                try:
+                    provider = next(iter(runtime_cfg.keys()))
+                except StopIteration:
+                    raise KeyError(
+                        "No hay proveedores configurados en 'runtime' y no se indicó 'provider'"
+                    )
 
         if model_name is None:
             model_name = self.agent_config["defaultModel"]
@@ -166,7 +183,12 @@ class BaseAgent(ABC):
         Raises:
             Exception: Si todos los proveedores fallan
         """
-        fallback_providers = self.config["runtime"]["fallbackProviders"]
+        # Construir lista de fallback providers. Preferir lista explícita en config,
+        # si no existe, usar todas las claves disponibles en runtime excluyendo el que falló.
+        runtime_cfg = self.config.get("runtime", {})
+        fallback_providers = runtime_cfg.get("fallbackProviders")
+        if fallback_providers is None:
+            fallback_providers = [p for p in runtime_cfg.keys() if p != failed_provider]
 
         for provider in fallback_providers:
             if provider == failed_provider:
@@ -206,7 +228,17 @@ class BaseAgent(ABC):
 
     def get_current_provider(self) -> str:
         """Obtener el proveedor actualmente en uso."""
-        return self._current_provider or self.config["runtime"]["defaultProvider"]
+        if self._current_provider:
+            return self._current_provider
+        runtime_cfg = self.config.get("runtime", {})
+        # Prefer explicit defaultProvider, sino primer proveedor configurado
+        default = runtime_cfg.get("defaultProvider")
+        if default:
+            return default
+        try:
+            return next(iter(runtime_cfg.keys()))
+        except StopIteration:
+            return ""
 
     def validate_provider_compatibility(self) -> Dict[str, Any]:
         """Validar compatibilidad con todos los proveedores configurados.
@@ -215,9 +247,23 @@ class BaseAgent(ABC):
             Diccionario con estado de compatibilidad por proveedor
         """
         results = {}
-        providers = [self.config["runtime"]["defaultProvider"]] + self.config[
-            "runtime"
-        ]["fallbackProviders"]
+        runtime_cfg = self.config.get("runtime", {})
+        # Construir lista de providers a validar: preferir explicit lists si existen
+        providers = []
+        default = runtime_cfg.get("defaultProvider")
+        if default:
+            providers.append(default)
+
+        fallback = runtime_cfg.get("fallbackProviders")
+        if fallback:
+            providers.extend(fallback)
+        else:
+            # Si no hay lista explícita, usar las claves conocidas en runtime
+            providers.extend([k for k in runtime_cfg.keys() if k not in providers])
+
+        # Deduplicar preservando orden
+        seen = set()
+        providers = [p for p in providers if not (p in seen or seen.add(p))]
 
         for provider in providers:
             try:

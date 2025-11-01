@@ -145,7 +145,9 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger configurado
     """
-    return logging.getLogger(f"agents.{name}")
+    # Devolver el logger exactamente con el nombre solicitado. Las pruebas esperan
+    # que get_logger("foo") devuelva un logger llamado "foo" (sin prefijos).
+    return logging.getLogger(name)
 
 
 def log_execution_start(logger: logging.Logger, execution_id: str, **kwargs) -> None:

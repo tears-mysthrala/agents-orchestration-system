@@ -6,6 +6,7 @@ Utiliza modelos locales (Ollama) con fallback a proveedores remotos.
 """
 
 from pathlib import Path
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from crewai import Agent, Task, Crew, LLM
 from .base_agent import BaseAgent
@@ -104,9 +105,16 @@ class PlannerAgent(BaseAgent):
 
     def _parse_plan_result(self, result) -> Dict[str, Any]:
         """Parsear el resultado del plan en formato estructurado."""
-        # Por simplicidad, retornamos el resultado como string por ahora
-        # En una implementación completa, podríamos parsear el Markdown
-        return {"plan": str(result), "status": "completed"}
+        # Por simplicidad, retornamos el resultado como string por ahora.
+        # Incluir tanto la clave 'plan' (compatibilidad previa) como
+        # 'plan_markdown' (esperada por algunas pruebas).
+        text = str(result)
+        return {
+            "plan": text,
+            "plan_markdown": text,
+            "status": "generated",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
 
     def execute(self, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Ejecutar la lógica principal del agente planificador."""
@@ -141,9 +149,11 @@ class PlannerAgent(BaseAgent):
         """Guardar el plan generado en archivo."""
         output_dir = Path(output_path).parent
         output_dir.mkdir(exist_ok=True)
+        # Soportar ambas formas: plan['plan'] o plan['plan_markdown']
+        content = plan.get("plan_markdown") or plan.get("plan") or ""
 
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(plan["plan"])
+            f.write(content)
 
         print(f"Plan guardado en: {output_path}")
 
