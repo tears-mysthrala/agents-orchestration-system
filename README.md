@@ -96,6 +96,7 @@ El proyecto incluye un dashboard web en tiempo real para controlar y monitorizar
 - **API REST**: Endpoints completos para acceso programático
 - **Métricas**: Health checks y métricas compatibles con Prometheus
 - **Compatible**: Funciona en Windows 11 y Linux (Arch, Ubuntu, etc.)
+- **Seguridad**: Protección XSS mediante manipulación segura del DOM
 
 #### Inicio Rápido
 
@@ -114,21 +115,41 @@ python scripts/run_web.py
 pip install uvloop
 ```
 
-**Acceder al Dashboard:**
-- Dashboard: http://127.0.0.1:8000/static/dashboard.html
-- API Docs: http://127.0.0.1:8000/docs
-- Métricas: http://127.0.0.1:8000/metrics
+#### Acceso
 
-#### Funcionalidades
+- **Dashboard en Tiempo Real**: `http://127.0.0.1:8000/static/dashboard.html`
+- **API Principal**: `http://127.0.0.1:8000`
+- **Documentación API**: `http://127.0.0.1:8000/docs`
+- **Health Check**: `http://127.0.0.1:8000/health`
+- **Métricas**: `http://127.0.0.1:8000/metrics`
 
-- Ver lista de agentes configurados en tiempo real
-- Controlar agentes: pausar, reanudar, detener, reiniciar
-- Priorizar agentes dinámicamente
-- Ver tareas completadas y pendientes
-- Logs de actividad en tiempo real
-- API REST completa para integración
+#### Dashboard en Tiempo Real
 
-Para más detalles, ver [web/README.md](web/README.md).
+El dashboard proporciona monitoreo en tiempo real de los agentes mediante WebSocket:
+
+- **Métricas en vivo**: Agentes totales, activos, tareas pendientes y completadas
+- **Tabla de agentes**: Estado actual, tareas asignadas, métricas de rendimiento
+- **Control de agentes**: Botones para pausar, reanudar, detener y reiniciar agentes
+- **Logs en vivo**: Stream de eventos y logs de los agentes en tiempo real
+- **Actualizaciones automáticas**: La interfaz se actualiza automáticamente vía WebSocket
+
+#### API REST y WebSocket
+
+**Endpoints principales:**
+
+- `GET /health` - Health check del servicio
+- `GET /metrics` - Métricas básicas del sistema (compatible con Prometheus)
+- `GET /api/agents` - Lista de agentes con estado en tiempo real
+- `GET /api/agents/{agent_id}` - Detalle de un agente específico
+- `POST /api/agents/{agent_id}/action` - Ejecutar acciones (pause, resume, stop, restart, prioritize)
+- `WS /api/agents/ws` - WebSocket para actualizaciones en tiempo real
+
+**Acciones disponibles:**
+- `pause` - Pausar un agente en ejecución
+- `resume` - Reanudar un agente pausado
+- `stop` - Detener un agente
+- `restart` - Reiniciar un agente (resetea contadores)
+- `prioritize` - Establecer prioridad de un agente
 
 #### Notas de Producción
 
@@ -137,7 +158,8 @@ La implementación actual usa almacenamiento en memoria para simplicidad. Para p
 - Usar Redis Pub/Sub para broadcasting de eventos WebSocket
 - Añadir autenticación (JWT/OAuth2)
 - Configurar HTTPS/WSS para conexiones seguras
-- Ver guía completa en web/README.md
+
+**Documentación completa**: Ver [web/README.md](web/README.md) para ejemplos de uso, testing con curl/wscat, y guía de producción.
 
 ### Buenas prácticas adicionales
 
