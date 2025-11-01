@@ -6,7 +6,7 @@ Tests using pytest-asyncio and httpx AsyncClient for async testing.
 
 import pytest
 import json
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
 import asyncio
 
@@ -25,7 +25,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_list_agents(self):
         """Test GET /api/agents endpoint."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/agents")
             
             assert response.status_code == 200
@@ -44,7 +44,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_get_agent_by_id(self):
         """Test GET /api/agents/{agent_id} endpoint."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # First get list of agents
             list_response = await client.get("/api/agents")
             agents = list_response.json()
@@ -63,7 +63,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_get_nonexistent_agent(self):
         """Test GET /api/agents/{agent_id} with invalid ID."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/agents/nonexistent-agent-999")
             
             assert response.status_code == 404
@@ -74,7 +74,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_pause_action(self):
         """Test POST /api/agents/{agent_id}/action with pause."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # Find a running agent
             list_response = await client.get("/api/agents")
             agents = list_response.json()
@@ -100,7 +100,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_resume_action(self):
         """Test POST /api/agents/{agent_id}/action with resume."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # First pause an agent
             list_response = await client.get("/api/agents")
             agents = list_response.json()
@@ -130,7 +130,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_stop_action(self):
         """Test POST /api/agents/{agent_id}/action with stop."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             list_response = await client.get("/api/agents")
             agents = list_response.json()
             agent_id = agents[0]["id"]
@@ -148,7 +148,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_restart_action(self):
         """Test POST /api/agents/{agent_id}/action with restart."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             list_response = await client.get("/api/agents")
             agents = list_response.json()
             agent_id = agents[0]["id"]
@@ -166,7 +166,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_prioritize_action(self):
         """Test POST /api/agents/{agent_id}/action with prioritize."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             list_response = await client.get("/api/agents")
             agents = list_response.json()
             agent_id = agents[0]["id"]
@@ -183,7 +183,7 @@ class TestAgentsRESTAPI:
     @pytest.mark.asyncio
     async def test_invalid_action_state_transition(self):
         """Test that invalid state transitions are rejected."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # Get an idle agent
             list_response = await client.get("/api/agents")
             agents = list_response.json()
@@ -211,7 +211,7 @@ class TestHealthAndMetrics:
     @pytest.mark.asyncio
     async def test_health_endpoint(self):
         """Test GET /health endpoint."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
             
             assert response.status_code == 200
@@ -223,7 +223,7 @@ class TestHealthAndMetrics:
     @pytest.mark.asyncio
     async def test_metrics_endpoint(self):
         """Test GET /metrics endpoint (Prometheus format)."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/metrics")
             
             assert response.status_code == 200

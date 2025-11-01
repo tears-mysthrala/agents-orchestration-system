@@ -24,15 +24,21 @@ import os
 # Agregar el directorio padre al path para importar módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestration.coordinator import AgentCoordinator
-from web.routers import agents as agents_router
-
 # Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+try:
+    from orchestration.coordinator import AgentCoordinator
+    coordinator = AgentCoordinator()
+except ImportError as e:
+    logger.warning(f"Could not import AgentCoordinator: {e}. Some features may be unavailable.")
+    coordinator = None
+
+from web.routers import agents as agents_router
 
 app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
 
@@ -41,9 +47,6 @@ app.include_router(agents_router.router)
 
 # Path al archivo de configuración
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
-
-# Instancia del coordinador
-coordinator = AgentCoordinator()
 
 
 def load_config() -> Dict[str, Any]:
@@ -188,6 +191,9 @@ async def get_workflows():
 @app.post("/api/workflows/{workflow_id}/execute")
 async def execute_workflow(workflow_id: str):
     """Ejecuta un workflow completo."""
+    if coordinator is None:
+        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
+    
     try:
         config = load_config()
 
@@ -233,6 +239,9 @@ async def execute_workflow(workflow_id: str):
 @app.post("/api/projects/new")
 async def create_new_project(project: Dict[str, Any]):
     """Crear y ejecutar un nuevo proyecto basado en especificaciones."""
+    if coordinator is None:
+        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
+    
     try:
         markdown = project.get("markdown", "")
         base_path = project.get("base_path", "")
