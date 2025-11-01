@@ -1,0 +1,4 @@
+# Prevent accidental installation of LangChain 1.x in this project
+langchain-core<1.0.0
+langchain-text-splitters<2.0.0
+langchain<1.0.0

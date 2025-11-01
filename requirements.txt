@@ -1,4 +1,5 @@
-langchain
+langchain==0.3.27
+langchain-core==0.3.79
 openai==1.109.1
 python-dotenv==1.2.1
 crewai
@@ -12,6 +13,7 @@ pytest==8.4.2
 pytest-asyncio>=0.21.0
 setuptools>=75.0.0
 psutil==6.1.0
+tiktoken
 chromadb
 tiktoken
 sentence-transformers==2.7.0
@@ -22,6 +24,7 @@ uvicorn[standard]==0.32.0
 websockets>=11.0
 langchain-community==0.3.27
 langchain-openai==0.2.0
+langchain-text-splitters==0.3.11
 starlette>=0.49.1
 urllib3>=2.5.0
 websockets>=12.0
