@@ -273,14 +273,15 @@ async def execute_action(agent_id: str, action_request: ActionRequest):
         updates["current_task"] = None
     
     elif action == AgentAction.RESTART:
+        # Restart resets the agent to initial state
         updates["status"] = AgentStatus.RUNNING
         updates["tasks_completed"] = 0
-        updates["tasks_pending"] = agent.tasks_pending
+        updates["tasks_pending"] = 0
     
     elif action == AgentAction.PRIORITIZE:
         priority = action_request.parameters.get("priority", "high")
-        if "metadata" not in agent.metadata:
-            updates["metadata"] = {}
+        if agent.metadata is None:
+            agent.metadata = {}
         agent.metadata["priority"] = priority
         updates["metadata"] = agent.metadata
     

@@ -166,45 +166,70 @@ class AgentDashboard {
             return;
         }
         
-        const rows = Array.from(this.agents.values()).map(agent => {
+        // Clear existing content
+        tbody.innerHTML = '';
+        
+        Array.from(this.agents.values()).forEach(agent => {
+            const row = document.createElement('tr');
+            row.className = 'updating';
+            row.dataset.agentId = agent.id;
+            
             const statusClass = `status-${agent.status}`;
             const canPause = agent.status === 'running';
             const canResume = agent.status === 'paused';
             const canStop = agent.status !== 'stopped';
             
-            return `
-                <tr class="updating" data-agent-id="${agent.id}">
-                    <td><strong>${agent.id}</strong></td>
-                    <td>${agent.name}</td>
-                    <td>${agent.type}</td>
-                    <td><span class="agent-status ${statusClass}">${agent.status}</span></td>
-                    <td>${agent.current_task || '<em style="color: #94a3b8;">No task</em>'}</td>
-                    <td>${agent.tasks_completed}</td>
-                    <td>${agent.tasks_pending}</td>
-                    <td>
-                        <div class="actions">
-                            <button class="btn btn-pause" onclick="dashboard.executeAction('${agent.id}', 'pause')" ${!canPause ? 'disabled' : ''}>
-                                Pause
-                            </button>
-                            <button class="btn btn-resume" onclick="dashboard.executeAction('${agent.id}', 'resume')" ${!canResume ? 'disabled' : ''}>
-                                Resume
-                            </button>
-                            <button class="btn btn-stop" onclick="dashboard.executeAction('${agent.id}', 'stop')" ${!canStop ? 'disabled' : ''}>
-                                Stop
-                            </button>
-                            <button class="btn btn-restart" onclick="dashboard.executeAction('${agent.id}', 'restart')">
-                                Restart
-                            </button>
-                            <button class="btn btn-prioritize" onclick="dashboard.executeAction('${agent.id}', 'prioritize', {priority: 'high'})">
-                                Prioritize
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        
-        tbody.innerHTML = rows;
+            // Create cells with text content (XSS-safe)
+            const idCell = document.createElement('td');
+            const idStrong = document.createElement('strong');
+            idStrong.textContent = agent.id;
+            idCell.appendChild(idStrong);
+            
+            const nameCell = document.createElement('td');
+            nameCell.textContent = agent.name;
+            
+            const typeCell = document.createElement('td');
+            typeCell.textContent = agent.type;
+            
+            const statusCell = document.createElement('td');
+            const statusSpan = document.createElement('span');
+            statusSpan.className = `agent-status ${statusClass}`;
+            statusSpan.textContent = agent.status;
+            statusCell.appendChild(statusSpan);
+            
+            const taskCell = document.createElement('td');
+            if (agent.current_task) {
+                taskCell.textContent = agent.current_task;
+            } else {
+                const em = document.createElement('em');
+                em.style.color = '#94a3b8';
+                em.textContent = 'No task';
+                taskCell.appendChild(em);
+            }
+            
+            const completedCell = document.createElement('td');
+            completedCell.textContent = agent.tasks_completed;
+            
+            const pendingCell = document.createElement('td');
+            pendingCell.textContent = agent.tasks_pending;
+            
+            // Create actions cell with event listeners (XSS-safe)
+            const actionsCell = document.createElement('td');
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+            
+            const pauseBtn = this.createActionButton('Pause', 'btn-pause', !canPause, () => this.executeAction(agent.id, 'pause'));
+            const resumeBtn = this.createActionButton('Resume', 'btn-resume', !canResume, () => this.executeAction(agent.id, 'resume'));
+            const stopBtn = this.createActionButton('Stop', 'btn-stop', !canStop, () => this.executeAction(agent.id, 'stop'));
+            const restartBtn = this.createActionButton('Restart', 'btn-restart', false, () => this.executeAction(agent.id, 'restart'));
+            const prioritizeBtn = this.createActionButton('Prioritize', 'btn-prioritize', false, () => this.executeAction(agent.id, 'prioritize', {priority: 'high'}));
+            
+            actionsDiv.append(pauseBtn, resumeBtn, stopBtn, restartBtn, prioritizeBtn);
+            actionsCell.appendChild(actionsDiv);
+            
+            row.append(idCell, nameCell, typeCell, statusCell, taskCell, completedCell, pendingCell, actionsCell);
+            tbody.appendChild(row);
+        });
         
         // Remove animation class after animation completes
         setTimeout(() => {
@@ -212,6 +237,17 @@ class AgentDashboard {
                 el.classList.remove('updating');
             });
         }, 1000);
+    }
+    
+    createActionButton(text, className, disabled, onClick) {
+        const btn = document.createElement('button');
+        btn.className = `btn ${className}`;
+        btn.textContent = text;
+        btn.disabled = disabled;
+        if (!disabled) {
+            btn.addEventListener('click', onClick);
+        }
+        return btn;
     }
     
     async executeAction(agentId, action, parameters = {}) {
@@ -266,15 +302,28 @@ class AgentDashboard {
             return;
         }
         
-        const logsHtml = this.logs.map(log => `
-            <div class="log-entry">
-                <span class="log-timestamp">${log.timestamp}</span>
-                <span class="log-level-${log.level}">[${log.level.toUpperCase()}]</span>
-                <span class="log-message">${log.message}</span>
-            </div>
-        `).join('');
+        // Clear and rebuild with XSS-safe DOM manipulation
+        container.innerHTML = '';
         
-        container.innerHTML = logsHtml;
+        this.logs.forEach(log => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const timestamp = document.createElement('span');
+            timestamp.className = 'log-timestamp';
+            timestamp.textContent = log.timestamp;
+            
+            const level = document.createElement('span');
+            level.className = `log-level-${log.level}`;
+            level.textContent = `[${log.level.toUpperCase()}]`;
+            
+            const message = document.createElement('span');
+            message.className = 'log-message';
+            message.textContent = log.message;
+            
+            entry.append(timestamp, level, message);
+            container.appendChild(entry);
+        });
     }
     
     updateConnectionStatus(status) {
