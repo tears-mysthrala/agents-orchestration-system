@@ -6,25 +6,38 @@ Proporciona endpoints para:
 - Ver estado de agentes
 - Ejecutar agentes y workflows
 - Gestionar configuración de agentes
+- Real-time updates via WebSocket
 """
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import json
+import logging
+import asyncio
 from typing import Dict, Any
 from pathlib import Path
-import os
-import sys
-import time
 from datetime import datetime
+import sys
+import os
 
 # Agregar el directorio padre al path para importar módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestration.coordinator import AgentCoordinator
+from web.routers import agents as agents_router
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
+
+# Include real-time agents router
+app.include_router(agents_router.router)
 
 # Path al archivo de configuración
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
@@ -47,9 +60,49 @@ def save_config(config: Dict[str, Any]):
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    }
+
+
+@app.get("/metrics")
+async def metrics():
+    """Basic metrics endpoint (Prometheus-compatible format).
+    
+    In production, consider using prometheus_client library for proper metrics.
+    """
+    agents = await agents_router.store.get_all()
+    
+    metrics_text = f"""# HELP agents_total Total number of agents
+# TYPE agents_total gauge
+agents_total {len(agents)}
+
+# HELP agents_by_status Number of agents by status
+# TYPE agents_by_status gauge
+"""
+    
+    status_counts = {}
+    for agent in agents:
+        status_counts[agent.status.value] = status_counts.get(agent.status.value, 0) + 1
+    
+    for status, count in status_counts.items():
+        metrics_text += f'agents_by_status{{status="{status}"}} {count}\n'
+    
+    return metrics_text
+
+
 @app.get("/")
 async def root():
     """Sirve la interfaz web principal."""
+    dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
+    if dashboard_path.exists():
+        return FileResponse(str(dashboard_path))
+    # Fallback to old index.html if dashboard doesn't exist yet
     return FileResponse("web/static/index.html")
 
 
@@ -239,10 +292,24 @@ async def create_new_project(project: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Montar archivos estáticos
-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+# Montar archivos estáticos usando pathlib para compatibilidad Windows/Unix
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# Example of handling blocking calls with run_in_executor
+async def run_blocking_task(func, *args):
+    """Run a blocking function in a thread pool executor.
+    
+    Example usage for CPU-bound or blocking I/O operations:
+        result = await run_blocking_task(some_blocking_function, arg1, arg2)
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, func, *args)
+
 
 if __name__ == "__main__":
     import uvicorn
-
+    
+    logger.info("Starting web server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

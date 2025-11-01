@@ -85,20 +85,59 @@ Proyecto para definir, construir y operar agentes de desarrollo que trabajen en 
 - Documenta en este README las combinaciones de modelos probadas, consumo de recursos y cualquier ajuste especifico (por ejemplo, limites de tokens o planificacion de tareas).
 - Monitoriza uso de hardware con herramientas como `htop`, `nvidia-smi` o el Monitor de recursos de Windows para detectar cuellos de botella al correr agentes en paralelo.
 
-### Interfaz Web
+### Web Dashboard (Local)
 
-El proyecto incluye una interfaz web para controlar y monitorizar los agentes de forma interactiva.
+El proyecto incluye un dashboard web en tiempo real para controlar y monitorizar los agentes de forma interactiva.
 
-- **Ejecutar la interfaz**: `.venv\Scripts\Activate.ps1; python scripts/run_web.py` (desde el directorio raíz)
-- **Acceder**: Abre `http://127.0.0.1:8000` en tu navegador
-- **Funcionalidades**:
-  - Ver lista de agentes configurados
-  - Añadir nuevos agentes a la configuración
-  - Modificar agentes existentes
-  - Ejecutar workflows completos
-  - Ver estado de ejecuciones (en desarrollo)
+#### Características
 
-La interfaz utiliza FastAPI para el backend y una interfaz HTML/JS simple para el frontend.
+- **Monitoreo en Tiempo Real**: Actualizaciones vía WebSocket de estado de agentes
+- **Control de Agentes**: Ejecutar acciones (pause, resume, stop, restart, prioritize)
+- **API REST**: Endpoints completos para acceso programático
+- **Métricas**: Health checks y métricas compatibles con Prometheus
+- **Compatible**: Funciona en Windows 11 y Linux (Arch, Ubuntu, etc.)
+
+#### Inicio Rápido
+
+**Windows:**
+```powershell
+.venv\Scripts\Activate.ps1
+python scripts\run_web.py
+```
+
+**Linux:**
+```bash
+source .venv/bin/activate
+python scripts/run_web.py
+
+# Opcional: mejor rendimiento con uvloop (solo Linux)
+pip install uvloop
+```
+
+**Acceder al Dashboard:**
+- Dashboard: http://127.0.0.1:8000/static/dashboard.html
+- API Docs: http://127.0.0.1:8000/docs
+- Métricas: http://127.0.0.1:8000/metrics
+
+#### Funcionalidades
+
+- Ver lista de agentes configurados en tiempo real
+- Controlar agentes: pausar, reanudar, detener, reiniciar
+- Priorizar agentes dinámicamente
+- Ver tareas completadas y pendientes
+- Logs de actividad en tiempo real
+- API REST completa para integración
+
+Para más detalles, ver [web/README.md](web/README.md).
+
+#### Notas de Producción
+
+La implementación actual usa almacenamiento en memoria para simplicidad. Para producción:
+- Reemplazar con Redis para estado compartido entre instancias
+- Usar Redis Pub/Sub para broadcasting de eventos WebSocket
+- Añadir autenticación (JWT/OAuth2)
+- Configurar HTTPS/WSS para conexiones seguras
+- Ver guía completa en web/README.md
 
 ### Buenas prácticas adicionales
 
