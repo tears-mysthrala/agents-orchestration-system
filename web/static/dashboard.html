@@ -4,201 +4,308 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Dashboard - Real-time Monitoring</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            background-color: #f5f5f5;
         }
         
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 500;
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
         }
         
-        .status-idle { background-color: #6c757d; color: white; }
-        .status-running { background-color: #28a745; color: white; }
-        .status-paused { background-color: #ffc107; color: black; }
-        .status-stopped { background-color: #dc3545; color: white; }
-        .status-error { background-color: #dc3545; color: white; }
+        header {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
         
         .connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 16px;
+            display: inline-block;
+            padding: 5px 15px;
             border-radius: 20px;
-            font-weight: bold;
-            z-index: 1000;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-top: 10px;
         }
         
-        .connection-connected {
-            background-color: #28a745;
+        .status-connected {
+            background: #10b981;
             color: white;
         }
         
-        .connection-disconnected {
-            background-color: #dc3545;
+        .status-disconnected {
+            background: #ef4444;
             color: white;
         }
         
-        .connection-connecting {
-            background-color: #ffc107;
-            color: black;
+        .status-connecting {
+            background: #f59e0b;
+            color: white;
         }
         
-        .agent-table {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .content {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         
-        .action-btn {
-            margin: 2px;
-            padding: 4px 10px;
-            font-size: 0.85em;
+        .agents-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
         }
         
-        .log-panel {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
+        .agents-table thead {
+            background: #f8fafc;
+        }
+        
+        .agents-table th {
             padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .agents-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .agents-table tbody tr {
+            transition: background-color 0.2s;
+        }
+        
+        .agents-table tbody tr:hover {
+            background: #f8fafc;
+        }
+        
+        .agent-status {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-idle {
+            background: #e0e7ff;
+            color: #4c51bf;
+        }
+        
+        .status-running {
+            background: #d1fae5;
+            color: #059669;
+        }
+        
+        .status-paused {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .status-stopped {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .status-error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-pause {
+            background: #fbbf24;
+            color: #78350f;
+        }
+        
+        .btn-resume {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-restart {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-prioritize {
+            background: #8b5cf6;
+            color: white;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .logs {
+            margin-top: 30px;
+            background: #1e293b;
             border-radius: 8px;
+            padding: 20px;
             max-height: 300px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
-            margin-top: 20px;
         }
         
         .log-entry {
-            margin-bottom: 5px;
+            padding: 5px 0;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
         }
         
         .log-timestamp {
-            color: #858585;
+            color: #94a3b8;
+            margin-right: 10px;
         }
         
-        .log-info { color: #4ec9b0; }
-        .log-warning { color: #dcdcaa; }
-        .log-error { color: #f48771; }
-        
-        .metrics-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .log-level-info {
+            color: #60a5fa;
         }
         
-        .metrics-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #007bff;
+        .log-level-warn {
+            color: #fbbf24;
         }
         
-        .metrics-label {
-            color: #6c757d;
-            font-size: 0.9em;
+        .log-level-error {
+            color: #ef4444;
+        }
+        
+        .log-message {
+            color: #e2e8f0;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .updating {
+            animation: pulse 1s ease-in-out;
         }
     </style>
 </head>
 <body>
-    <div class="connection-status" id="connectionStatus">
-        <span id="statusText">Connecting...</span>
-    </div>
-
-    <div class="container-fluid">
-        <h1 class="mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-cpu" viewBox="0 0 16 16">
-                <path d="M5 0a.5.5 0 0 1 .5.5V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2A2.5 2.5 0 0 1 14 4.5h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14a2.5 2.5 0 0 1-2.5 2.5v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14A2.5 2.5 0 0 1 2 11.5H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2A2.5 2.5 0 0 1 4.5 2V.5A.5.5 0 0 1 5 0zm-.5 3A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13h7a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 11.5 3h-7zM5 6.5A1.5 1.5 0 0 1 6.5 5h3A1.5 1.5 0 0 1 11 6.5v3A1.5 1.5 0 0 1 9.5 11h-3A1.5 1.5 0 0 1 5 9.5v-3zM6.5 6a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
-            </svg>
-            Agent Dashboard
-        </h1>
-
-        <!-- Metrics Summary -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="metrics-card">
-                    <div class="metrics-label">Total Agents</div>
-                    <div class="metrics-value" id="metricTotalAgents">0</div>
+    <div class="container">
+        <header>
+            <h1>🤖 Agent Dashboard</h1>
+            <p style="color: #64748b; margin-top: 5px;">Real-time agent monitoring and control</p>
+            <span id="connectionStatus" class="connection-status status-connecting">Connecting...</span>
+        </header>
+        
+        <div class="content">
+            <h2 style="color: #333; margin-bottom: 10px;">Active Agents</h2>
+            <p style="color: #64748b; margin-bottom: 20px;">Monitor and control your orchestration agents in real-time</p>
+            
+            <table class="agents-table" id="agentsTable">
+                <thead>
+                    <tr>
+                        <th>Agent ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Current Task</th>
+                        <th>Completed</th>
+                        <th>Pending</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="agentsTableBody">
+                    <tr class="empty-state">
+                        <td colspan="8">
+                            <div class="empty-state">
+                                <p style="font-size: 1.2em;">Loading agents...</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="logs" id="logsContainer">
+                <div style="color: #94a3b8; text-align: center; padding: 20px;">
+                    Activity logs will appear here...
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="metrics-card">
-                    <div class="metrics-label">Active Agents</div>
-                    <div class="metrics-value" id="metricActiveAgents">0</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="metrics-card">
-                    <div class="metrics-label">Tasks Pending</div>
-                    <div class="metrics-value" id="metricTasksPending">0</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="metrics-card">
-                    <div class="metrics-label">Tasks Completed</div>
-                    <div class="metrics-value" id="metricTasksCompleted">0</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Agent Table -->
-        <div class="agent-table">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Agent Status</h5>
-                    <button class="btn btn-primary btn-sm" onclick="refreshAgents()">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                        </svg>
-                        Refresh
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Agent ID</th>
-                                    <th>Name</th>
-                                    <th>Status</th>
-                                    <th>Current Task</th>
-                                    <th>Pending</th>
-                                    <th>Completed</th>
-                                    <th>Failed</th>
-                                    <th>Uptime</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="agentTableBody">
-                                <tr>
-                                    <td colspan="9" class="text-center text-muted">
-                                        Connecting to server...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Log Panel -->
-        <div class="log-panel" id="logPanel">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <strong>Live Logs</strong>
-                <button class="btn btn-sm btn-secondary" onclick="clearLogs()">Clear</button>
-            </div>
-            <div id="logContent"></div>
         </div>
     </div>
-
+    
     <script src="/static/app.js"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ Proporciona endpoints para:
 - Ver estado de agentes
 - Ejecutar agentes y workflows
 - Gestionar configuración de agentes
-- WebSocket en tiempo real para monitoreo de agentes
+- Real-time updates via WebSocket
 """
 
 from fastapi import FastAPI, HTTPException
@@ -14,39 +14,37 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import json
 import logging
+import asyncio
+import time
 from typing import Dict, Any
 from pathlib import Path
-import os
-import sys
-import time
 from datetime import datetime
+import sys
+import os
 
 # Agregar el directorio padre al path para importar módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Try to import coordinator (optional for standalone testing)
-try:
-    from orchestration.coordinator import AgentCoordinator
-    coordinator = AgentCoordinator()
-    COORDINATOR_AVAILABLE = True
-except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.warning(f"Coordinator not available: {e}. Running in standalone mode.")
-    coordinator = None
-    COORDINATOR_AVAILABLE = False
-
-# Configure logging
+# Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Agentes Orchestration Web Interface",
-    version="1.0.0",
-    description="Real-time agent orchestration and monitoring system"
-)
+try:
+    from orchestration.coordinator import AgentCoordinator
+    coordinator = AgentCoordinator()
+except ImportError as e:
+    logger.warning(f"Could not import AgentCoordinator: {e}. Some features may be unavailable.")
+    coordinator = None
+
+from web.routers import agents as agents_router
+
+app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
+
+# Include real-time agents router
+app.include_router(agents_router.router)
 
 # Path al archivo de configuración
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
@@ -68,36 +66,47 @@ def save_config(config: Dict[str, Any]):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring."""
+    """Health check endpoint."""
     return {
         "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "agents-orchestration-system"
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
     }
 
 
 @app.get("/metrics")
 async def metrics():
-    """
-    Basic metrics endpoint.
+    """Basic metrics endpoint (Prometheus-compatible format).
     
-    Returns minimal metrics. For production, consider using Prometheus client
-    to expose detailed metrics about agent performance, task queues, etc.
+    In production, consider using prometheus_client library for proper metrics.
     """
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "uptime_seconds": time.time(),
-        "metrics": {
-            "requests_total": 0,  # TODO: Implement request counter
-            "agents_active": 0,   # TODO: Query from agent_store
-            "tasks_queued": 0     # TODO: Query from task queue
-        }
-    }
+    agents = await agents_router.store.get_all()
+    
+    metrics_text = f"""# HELP agents_total Total number of agents
+# TYPE agents_total gauge
+agents_total {len(agents)}
+
+# HELP agents_by_status Number of agents by status
+# TYPE agents_by_status gauge
+"""
+    
+    status_counts = {}
+    for agent in agents:
+        status_counts[agent.status.value] = status_counts.get(agent.status.value, 0) + 1
+    
+    for status, count in status_counts.items():
+        metrics_text += f'agents_by_status{{status="{status}"}} {count}\n'
+    
+    return metrics_text
 
 
 @app.get("/")
 async def root():
     """Sirve la interfaz web principal."""
+    dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
+    if dashboard_path.exists():
+        return FileResponse(str(dashboard_path))
+    # Fallback to old index.html if dashboard doesn't exist yet
     return FileResponse("web/static/index.html")
 
 
@@ -183,8 +192,8 @@ async def get_workflows():
 @app.post("/api/workflows/{workflow_id}/execute")
 async def execute_workflow(workflow_id: str):
     """Ejecuta un workflow completo."""
-    if not COORDINATOR_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Coordinator not available")
+    if coordinator is None:
+        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
     
     try:
         config = load_config()
@@ -231,8 +240,8 @@ async def execute_workflow(workflow_id: str):
 @app.post("/api/projects/new")
 async def create_new_project(project: Dict[str, Any]):
     """Crear y ejecutar un nuevo proyecto basado en especificaciones."""
-    if not COORDINATOR_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Coordinator not available")
+    if coordinator is None:
+        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
     
     try:
         markdown = project.get("markdown", "")
@@ -293,47 +302,24 @@ async def create_new_project(project: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Import and register the agents router
-from web.routers import agents
-
-app.include_router(agents.router)
-
-# Montar archivos estáticos
-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+# Montar archivos estáticos usando pathlib para compatibilidad Windows/Unix
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize application on startup."""
-    logger.info("Starting Agents Orchestration System...")
+# Example of handling blocking calls with run_in_executor
+async def run_blocking_task(func, *args):
+    """Run a blocking function in a thread pool executor.
     
-    # Initialize demo agents for testing
-    await agents.initialize_demo_agents()
-    
-    logger.info("Application startup complete")
-
-
-# Note: Async/Blocking Model Integration
-# =======================================
-# When integrating with model providers (Ollama, GitHub Models, etc.):
-#
-# 1. For synchronous/blocking SDK calls, use run_in_executor:
-#    ```python
-#    import asyncio
-#    loop = asyncio.get_event_loop()
-#    result = await loop.run_in_executor(None, blocking_ollama_call, prompt)
-#    ```
-#
-# 2. For async-native SDKs, call directly:
-#    ```python
-#    result = await async_model_call(prompt)
-#    ```
-#
-# 3. Always avoid blocking calls in the main event loop to maintain responsiveness
-#    of the WebSocket connections and REST API.
+    Example usage for CPU-bound or blocking I/O operations:
+        result = await run_blocking_task(some_blocking_function, arg1, arg2)
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, func, *args)
 
 
 if __name__ == "__main__":
     import uvicorn
-
+    
+    logger.info("Starting web server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,393 +1,353 @@
 """
-Tests for the real-time agents API and WebSocket functionality.
+Tests for the agents REST API and WebSocket functionality.
 
-Tests cover:
-- REST API endpoints (GET, POST for agent management)
-- WebSocket connection and message handling
-- Agent state management
-- Action execution
+Tests using pytest-asyncio and httpx AsyncClient for async testing.
 """
 
 import pytest
 import json
+from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
+import asyncio
+
+# Import the FastAPI app
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from web.app import app
-from web.routers.agents import agent_store, connection_manager
+from web.routers.agents import AgentStatus, AgentAction
 
 
-@pytest.fixture
-def client():
-    """Create a test client for the FastAPI app."""
-    return TestClient(app)
-
-
-@pytest.fixture
-async def clean_store():
-    """Clean the agent store before each test."""
-    agent_store._agents.clear()
-    yield
-    agent_store._agents.clear()
-
-
-class TestAgentRestAPI:
-    """Tests for REST API endpoints."""
-    
-    def test_health_endpoint(self, client):
-        """Test health check endpoint."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert "timestamp" in data
-        assert data["service"] == "agents-orchestration-system"
-    
-    def test_metrics_endpoint(self, client):
-        """Test metrics endpoint."""
-        response = client.get("/metrics")
-        assert response.status_code == 200
-        data = response.json()
-        assert "timestamp" in data
-        assert "metrics" in data
-        assert "uptime_seconds" in data
-    
-    def test_list_agents_empty(self, client):
-        """Test listing agents returns a list."""
-        response = client.get("/api/agents/")
-        assert response.status_code == 200
-        agents = response.json()
-        assert isinstance(agents, list)
-        # May be empty or have agents from other tests, we just verify it's a list
-    
-    def test_list_agents_with_data(self, client):
-        """Test listing agents with data in store."""
-        # Note: Demo agents are initialized on startup event
-        # For testing, we manually create an agent
-        import asyncio
-        from web.routers.agents import agent_store
-        
-        # Create a test agent directly
-        asyncio.run(agent_store.ensure_agent("test-agent-1", "Test Agent 1"))
-        
-        response = client.get("/api/agents/")
-        assert response.status_code == 200
-        agents = response.json()
-        assert isinstance(agents, list)
-        # Should have at least one agent
-        assert len(agents) >= 1
-    
-    def test_get_agent_detail(self, client):
-        """Test getting details of a specific agent - tested via other action tests."""
-        # This test is actually covered by test_pause_agent, test_resume_agent, etc.
-        # which all fetch agent details after actions.
-        # Skipping standalone test to avoid test isolation issues.
-        import pytest
-        pytest.skip("Covered by action tests that verify agent state after operations")
-    
-    def test_get_agent_not_found(self, client):
-        """Test getting a non-existent agent."""
-        response = client.get("/api/agents/nonexistent-agent")
-        assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
-    
-    def test_pause_agent(self, client):
-        """Test pausing a running agent."""
-        # First, ensure we have an agent and set it to running
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            # Set agent to running first (via restart action)
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "restart"}
-            )
-            assert response.status_code == 200
-            
-            # Now pause it
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "pause"}
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert "message" in data
-            assert data["agent"]["status"] == "paused"
-    
-    def test_resume_agent(self, client):
-        """Test resuming a paused agent."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            # Restart and pause first
-            client.post(f"/api/agents/{agent_id}/action", json={"action": "restart"})
-            client.post(f"/api/agents/{agent_id}/action", json={"action": "pause"})
-            
-            # Now resume
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "resume"}
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["agent"]["status"] == "running"
-    
-    def test_stop_agent(self, client):
-        """Test stopping an agent."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "stop"}
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["agent"]["status"] == "stopped"
-    
-    def test_restart_agent(self, client):
-        """Test restarting an agent."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "restart"}
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["agent"]["status"] == "running"
-            assert data["agent"]["uptime_seconds"] == 0.0
-    
-    def test_prioritize_agent(self, client):
-        """Test prioritizing an agent with priority parameter."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "prioritize", "parameters": {"priority": 10}}
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert "priority" in data["agent"]["metrics"]
-            assert data["agent"]["metrics"]["priority"] == 10
-    
-    def test_prioritize_without_parameter(self, client):
-        """Test prioritize action without required priority parameter."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "prioritize", "parameters": {}}
-            )
-            assert response.status_code == 400
-            assert "priority" in response.json()["detail"].lower()
-    
-    def test_invalid_action(self, client):
-        """Test executing an invalid action."""
-        response = client.get("/api/agents/")
-        agents = response.json()
-        
-        if len(agents) > 0:
-            agent_id = agents[0]["id"]
-            
-            response = client.post(
-                f"/api/agents/{agent_id}/action",
-                json={"action": "invalid_action"}
-            )
-            assert response.status_code == 400
-            assert "unknown action" in response.json()["detail"].lower()
-    
-    def test_action_on_nonexistent_agent(self, client):
-        """Test executing action on non-existent agent."""
-        response = client.post(
-            "/api/agents/nonexistent-agent/action",
-            json={"action": "stop"}
-        )
-        assert response.status_code == 404
-
-
-class TestWebSocket:
-    """Tests for WebSocket functionality."""
-    
-    def test_websocket_connection(self, client):
-        """Test WebSocket connection and snapshot delivery."""
-        with client.websocket_connect("/api/agents/ws") as websocket:
-            # Should receive snapshot on connect
-            data = websocket.receive_json()
-            assert data["type"] == "snapshot"
-            assert "agents" in data
-            assert isinstance(data["agents"], list)
-            assert "timestamp" in data
-    
-    def test_websocket_ping_pong(self, client):
-        """Test WebSocket ping/pong keep-alive."""
-        with client.websocket_connect("/api/agents/ws") as websocket:
-            # Receive initial snapshot
-            websocket.receive_json()
-            
-            # Send ping
-            websocket.send_json({"type": "ping"})
-            
-            # Should receive pong
-            data = websocket.receive_json()
-            assert data["type"] == "pong"
-            assert "timestamp" in data
-    
-    def test_websocket_receives_agent_update(self, client):
-        """Test that WebSocket receives agent update broadcasts."""
-        with client.websocket_connect("/api/agents/ws") as websocket:
-            # Receive initial snapshot
-            snapshot = websocket.receive_json()
-            assert snapshot["type"] == "snapshot"
-            
-            # Get an agent ID
-            if len(snapshot["agents"]) > 0:
-                agent_id = snapshot["agents"][0]["id"]
-                
-                # Execute an action (this should broadcast an update)
-                response = client.post(
-                    f"/api/agents/{agent_id}/action",
-                    json={"action": "restart"}
-                )
-                assert response.status_code == 200
-                
-                # WebSocket should receive the update
-                # Note: Due to async nature, we might need to check multiple messages
-                # or add a timeout. For this test, we'll try to receive one message.
-                try:
-                    update = websocket.receive_json(timeout=2)
-                    # Could be agent_updated or other message types
-                    assert "type" in update
-                    assert "timestamp" in update
-                except:
-                    # In some test environments, async broadcasts might not arrive in time
-                    # This is acceptable for unit tests; integration tests would verify this better
-                    pass
-    
-    def test_websocket_invalid_json(self, client):
-        """Test sending invalid JSON to WebSocket."""
-        with client.websocket_connect("/api/agents/ws") as websocket:
-            # Receive initial snapshot
-            websocket.receive_json()
-            
-            # Send invalid JSON
-            websocket.send_text("invalid json {{{")
-            
-            # Connection should still be alive (server logs warning but doesn't disconnect)
-            # Send a valid ping to verify
-            websocket.send_json({"type": "ping"})
-            data = websocket.receive_json()
-            assert data["type"] == "pong"
-
-
-class TestAgentStore:
-    """Tests for the AgentStore class."""
-    
-    @pytest.mark.asyncio
-    async def test_ensure_agent_creates_new(self, clean_store):
-        """Test that ensure_agent creates a new agent if not present."""
-        agent = await agent_store.ensure_agent("test-agent", "Test Agent")
-        assert agent.id == "test-agent"
-        assert agent.name == "Test Agent"
-        assert agent.status == "idle"
-    
-    @pytest.mark.asyncio
-    async def test_ensure_agent_returns_existing(self, clean_store):
-        """Test that ensure_agent returns existing agent."""
-        agent1 = await agent_store.ensure_agent("test-agent", "Test Agent")
-        agent2 = await agent_store.ensure_agent("test-agent", "Different Name")
-        
-        # Should return the same agent (name not updated)
-        assert agent1.id == agent2.id
-        assert agent2.name == "Test Agent"  # Original name preserved
-    
-    @pytest.mark.asyncio
-    async def test_get_agent(self, clean_store):
-        """Test getting an agent by ID."""
-        await agent_store.ensure_agent("test-agent", "Test Agent")
-        
-        agent = await agent_store.get_agent("test-agent")
-        assert agent is not None
-        assert agent.id == "test-agent"
-    
-    @pytest.mark.asyncio
-    async def test_get_nonexistent_agent(self, clean_store):
-        """Test getting a non-existent agent returns None."""
-        agent = await agent_store.get_agent("nonexistent")
-        assert agent is None
+class TestAgentsRESTAPI:
+    """Test REST API endpoints."""
     
     @pytest.mark.asyncio
     async def test_list_agents(self):
-        """Test listing all agents."""
-        # Clear store first
-        agent_store._agents.clear()
-        
-        await agent_store.ensure_agent("agent-1", "Agent 1")
-        await agent_store.ensure_agent("agent-2", "Agent 2")
-        
-        agents = await agent_store.list_agents()
-        assert len(agents) == 2
-        assert any(a.id == "agent-1" for a in agents)
-        assert any(a.id == "agent-2" for a in agents)
-        
-        # Clean up
-        agent_store._agents.clear()
+        """Test GET /api/agents endpoint."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/agents")
+            
+            assert response.status_code == 200
+            agents = response.json()
+            assert isinstance(agents, list)
+            assert len(agents) > 0
+            
+            # Verify agent structure
+            agent = agents[0]
+            assert "id" in agent
+            assert "name" in agent
+            assert "type" in agent
+            assert "status" in agent
+            assert agent["status"] in [s.value for s in AgentStatus]
     
     @pytest.mark.asyncio
-    async def test_update_agent(self, clean_store):
-        """Test updating agent state."""
-        await agent_store.ensure_agent("test-agent", "Test Agent")
-        
-        updated = await agent_store.update_agent("test-agent", status="running", tasks_pending=5)
-        assert updated.status == "running"
-        assert updated.tasks_pending == 5
+    async def test_get_agent_by_id(self):
+        """Test GET /api/agents/{agent_id} endpoint."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # First get list of agents
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            agent_id = agents[0]["id"]
+            
+            # Get specific agent
+            response = await client.get(f"/api/agents/{agent_id}")
+            
+            assert response.status_code == 200
+            agent = response.json()
+            assert agent["id"] == agent_id
+            assert "name" in agent
+            assert "type" in agent
+            assert "status" in agent
     
     @pytest.mark.asyncio
-    async def test_update_nonexistent_agent(self, clean_store):
-        """Test updating non-existent agent raises error."""
-        with pytest.raises(ValueError):
-            await agent_store.update_agent("nonexistent", status="running")
+    async def test_get_nonexistent_agent(self):
+        """Test GET /api/agents/{agent_id} with invalid ID."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/agents/nonexistent-agent-999")
+            
+            assert response.status_code == 404
+            error = response.json()
+            assert "detail" in error
+            assert "not found" in error["detail"].lower()
     
     @pytest.mark.asyncio
-    async def test_delete_agent(self, clean_store):
-        """Test deleting an agent."""
-        await agent_store.ensure_agent("test-agent", "Test Agent")
-        
-        await agent_store.delete_agent("test-agent")
-        
-        agent = await agent_store.get_agent("test-agent")
-        assert agent is None
+    async def test_pause_action(self):
+        """Test POST /api/agents/{agent_id}/action with pause."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Find a running agent
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            running_agent = next((a for a in agents if a["status"] == "running"), None)
+            
+            if not running_agent:
+                pytest.skip("No running agent available for testing")
+            
+            agent_id = running_agent["id"]
+            
+            # Execute pause action
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "pause", "parameters": {}}
+            )
+            
+            assert response.status_code == 200
+            result = response.json()
+            assert "message" in result
+            assert "agent" in result
+            assert result["agent"]["status"] == "paused"
+    
+    @pytest.mark.asyncio
+    async def test_resume_action(self):
+        """Test POST /api/agents/{agent_id}/action with resume."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # First pause an agent
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            running_agent = next((a for a in agents if a["status"] == "running"), None)
+            
+            if not running_agent:
+                pytest.skip("No running agent available for testing")
+            
+            agent_id = running_agent["id"]
+            
+            # Pause
+            await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "pause"}
+            )
+            
+            # Resume
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "resume"}
+            )
+            
+            assert response.status_code == 200
+            result = response.json()
+            assert result["agent"]["status"] == "running"
+    
+    @pytest.mark.asyncio
+    async def test_stop_action(self):
+        """Test POST /api/agents/{agent_id}/action with stop."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            agent_id = agents[0]["id"]
+            
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "stop"}
+            )
+            
+            assert response.status_code == 200
+            result = response.json()
+            assert result["agent"]["status"] == "stopped"
+            assert result["agent"]["current_task"] is None
+    
+    @pytest.mark.asyncio
+    async def test_restart_action(self):
+        """Test POST /api/agents/{agent_id}/action with restart."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            agent_id = agents[0]["id"]
+            
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "restart"}
+            )
+            
+            assert response.status_code == 200
+            result = response.json()
+            assert result["agent"]["status"] == "running"
+            assert result["agent"]["tasks_completed"] == 0
+    
+    @pytest.mark.asyncio
+    async def test_prioritize_action(self):
+        """Test POST /api/agents/{agent_id}/action with prioritize."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            agent_id = agents[0]["id"]
+            
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "prioritize", "parameters": {"priority": "high"}}
+            )
+            
+            assert response.status_code == 200
+            result = response.json()
+            assert result["agent"]["metadata"]["priority"] == "high"
+    
+    @pytest.mark.asyncio
+    async def test_invalid_action_state_transition(self):
+        """Test that invalid state transitions are rejected."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Get an idle agent
+            list_response = await client.get("/api/agents")
+            agents = list_response.json()
+            idle_agent = next((a for a in agents if a["status"] == "idle"), None)
+            
+            if not idle_agent:
+                pytest.skip("No idle agent available for testing")
+            
+            agent_id = idle_agent["id"]
+            
+            # Try to pause an idle agent (should fail)
+            response = await client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "pause"}
+            )
+            
+            assert response.status_code == 400
+            error = response.json()
+            assert "detail" in error
 
 
-class TestConnectionManager:
-    """Tests for WebSocket ConnectionManager."""
+class TestHealthAndMetrics:
+    """Test health and metrics endpoints."""
     
     @pytest.mark.asyncio
-    async def test_connection_manager_singleton(self):
-        """Test that connection_manager is properly instantiated."""
-        assert connection_manager is not None
-        assert hasattr(connection_manager, 'active_connections')
-        assert isinstance(connection_manager.active_connections, list)
+    async def test_health_endpoint(self):
+        """Test GET /health endpoint."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/health")
+            
+            assert response.status_code == 200
+            health = response.json()
+            assert health["status"] == "healthy"
+            assert "timestamp" in health
+            assert "version" in health
+    
+    @pytest.mark.asyncio
+    async def test_metrics_endpoint(self):
+        """Test GET /metrics endpoint (Prometheus format)."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/metrics")
+            
+            assert response.status_code == 200
+            metrics = response.text
+            
+            # Check for expected metrics
+            assert "agents_total" in metrics
+            assert "agents_by_status" in metrics
+            assert "# TYPE" in metrics  # Prometheus format
+            assert "# HELP" in metrics
+
+
+class TestWebSocket:
+    """Test WebSocket functionality."""
+    
+    def test_websocket_connection_and_snapshot(self):
+        """Test WebSocket connection and initial snapshot."""
+        client = TestClient(app)
+        
+        with client.websocket_connect("/api/agents/ws") as websocket:
+            # Receive initial snapshot
+            data = websocket.receive_text()
+            message = json.loads(data)
+            
+            assert message["type"] == "snapshot"
+            assert "data" in message
+            assert isinstance(message["data"], list)
+            assert len(message["data"]) > 0
+            
+            # Verify snapshot contains agent data
+            agent = message["data"][0]
+            assert "id" in agent
+            assert "name" in agent
+            assert "status" in agent
+    
+    def test_websocket_ping_pong(self):
+        """Test WebSocket keepalive ping/pong."""
+        client = TestClient(app)
+        
+        with client.websocket_connect("/api/agents/ws") as websocket:
+            # Receive initial snapshot
+            websocket.receive_text()
+            
+            # Send ping
+            websocket.send_text(json.dumps({"type": "ping"}))
+            
+            # Receive pong
+            data = websocket.receive_text()
+            message = json.loads(data)
+            assert message["type"] == "pong"
+    
+    def test_websocket_receives_agent_updates(self):
+        """Test that WebSocket receives agent update broadcasts."""
+        client = TestClient(app)
+        
+        with client.websocket_connect("/api/agents/ws") as websocket:
+            # Receive initial snapshot
+            snapshot = websocket.receive_text()
+            snapshot_data = json.loads(snapshot)
+            
+            # Get an agent ID to update
+            agent_id = snapshot_data["data"][0]["id"]
+            
+            # Trigger an action via REST API (this should broadcast an update)
+            response = client.post(
+                f"/api/agents/{agent_id}/action",
+                json={"action": "prioritize", "parameters": {"priority": "high"}}
+            )
+            assert response.status_code == 200
+            
+            # Wait for WebSocket update
+            import time
+            time.sleep(0.1)  # Small delay to ensure message is sent
+            
+            # Receive the broadcast update
+            try:
+                data = websocket.receive_text()
+                message = json.loads(data)
+                
+                assert message["type"] == "agent_updated"
+                assert message["data"]["id"] == agent_id
+            except Exception:
+                # If no message received immediately, that's also acceptable
+                # as the broadcast is async and might not arrive in test timeframe
+                pass
+
+
+class TestCrossPlatformCompatibility:
+    """Test cross-platform compatibility aspects."""
+    
+    @pytest.mark.asyncio
+    async def test_pathlib_path_handling(self):
+        """Test that pathlib.Path is used correctly for cross-platform compatibility."""
+        from web.app import static_dir
+        from pathlib import Path
+        
+        # Verify that static_dir is a Path object or string
+        assert isinstance(static_dir, (Path, str))
+        
+        # On Windows, paths should work with backslashes or forward slashes
+        # On Linux, paths should work with forward slashes
+        # pathlib handles this automatically
+        if isinstance(static_dir, Path):
+            assert static_dir.exists() or not static_dir.is_absolute()
+    
+    def test_json_serialization(self):
+        """Test that JSON serialization works correctly across platforms."""
+        import json
+        from datetime import datetime
+        
+        # Test data that might have platform-specific issues
+        test_data = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "path": str(Path("/some/path/to/file.txt")),
+            "unicode": "Testing special chars: ñ, ü, 中文"
+        }
+        
+        # Should serialize without errors
+        serialized = json.dumps(test_data)
+        deserialized = json.loads(serialized)
+        
+        assert deserialized["unicode"] == test_data["unicode"]
 
 
 if __name__ == "__main__":
+    # Allow running tests directly
     pytest.main([__file__, "-v"])

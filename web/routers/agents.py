@@ -1,459 +1,377 @@
 """
-Real-time agent management API with REST endpoints and WebSocket support.
+Router REST + WebSocket for real-time agent management.
 
 This module provides:
-- REST API for agent management (list, detail, actions)
+- REST API endpoints for agent listing, details, and actions
 - WebSocket endpoint for real-time updates
-- In-memory store for agent state (replaceable with Redis for production)
-- ConnectionManager for handling multiple WebSocket clients
+- In-memory store (ready to be replaced with Redis in production)
+- Thread-safe operations with asyncio.Lock
 """
 
 import asyncio
 import json
-import logging
+import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional, Set, Any
+from enum import Enum
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
 
-# Router instance
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+# --- Data Models ---
+
+class AgentStatus(str, Enum):
+    """Agent execution status."""
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+    ERROR = "error"
 
 
-# ============================================================================
-# Data Models
-# ============================================================================
+class AgentAction(str, Enum):
+    """Available agent actions."""
+    PAUSE = "pause"
+    RESUME = "resume"
+    STOP = "stop"
+    RESTART = "restart"
+    PRIORITIZE = "prioritize"
 
-class AgentState(BaseModel):
-    """Model representing the state of an agent."""
+
+class Agent(BaseModel):
+    """Agent data model."""
     id: str
     name: str
-    status: str = "idle"  # idle, running, paused, stopped, error
+    type: str
+    status: AgentStatus = AgentStatus.IDLE
     current_task: Optional[str] = None
-    tasks_pending: int = 0
     tasks_completed: int = 0
-    tasks_failed: int = 0
-    uptime_seconds: float = 0.0
-    last_activity: Optional[str] = None
-    metrics: Dict[str, Any] = Field(default_factory=dict)
+    tasks_pending: int = 0
+    last_update: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-class AgentAction(BaseModel):
-    """Model for agent actions."""
-    action: str = Field(..., description="Action to perform: pause, resume, stop, restart, prioritize")
-    parameters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional parameters for the action")
+class ActionRequest(BaseModel):
+    """Request model for agent actions."""
+    action: AgentAction
+    parameters: Dict[str, Any] = Field(default_factory=dict)
 
 
-class TaskInfo(BaseModel):
-    """Model for task information."""
-    task_id: str
-    agent_id: str
-    description: str
-    status: str
-    created_at: str
+class WebSocketMessage(BaseModel):
+    """WebSocket message format."""
+    type: str  # "snapshot", "agent_updated", "task_added", "task_completed", "log_line"
+    data: Any
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-# ============================================================================
-# In-Memory Store
-# ============================================================================
+# --- In-Memory Store ---
+# This is designed to be easily replaced with Redis in production.
+# Extension points:
+# 1. Replace _agents dict with Redis hash: HSET agents:{agent_id} field value
+# 2. Replace _lock with Redis distributed lock (redlock pattern)
+# 3. Use Redis pub/sub for broadcasting instead of ConnectionManager
+# 4. Store logs in Redis list: LPUSH agent:{agent_id}:logs message
 
 class AgentStore:
-    """
-    In-memory store for agent state.
+    """In-memory agent store with thread-safe operations.
     
-    Note: For production with multiple instances, replace with Redis or
-    a distributed cache with pub/sub for synchronizing events.
+    Production replacement notes:
+    - Use Redis HSET for agents: redis.hset(f"agent:{agent_id}", mapping=agent.dict())
+    - Use Redis pub/sub for events: redis.publish("agent_events", json.dumps(event))
+    - Use Redis sorted sets for task queues
     """
     
     def __init__(self):
-        self._agents: Dict[str, AgentState] = {}
+        self._agents: Dict[str, Agent] = {}
         self._lock = asyncio.Lock()
+        self._initialize_sample_agents()
     
-    async def ensure_agent(self, agent_id: str, name: str = None) -> AgentState:
-        """Ensure agent exists in store, create if not present."""
+    def _initialize_sample_agents(self):
+        """Initialize with sample agents for demonstration."""
+        sample_agents = [
+            Agent(
+                id="planner-001",
+                name="Planner Agent",
+                type="planner",
+                status=AgentStatus.IDLE,
+                tasks_completed=5,
+                tasks_pending=2,
+                metadata={"model": "gpt-4", "priority": "high"}
+            ),
+            Agent(
+                id="executor-001",
+                name="Executor Agent",
+                type="executor",
+                status=AgentStatus.RUNNING,
+                current_task="Implement feature X",
+                tasks_completed=12,
+                tasks_pending=3,
+                metadata={"model": "gpt-3.5-turbo", "priority": "medium"}
+            ),
+            Agent(
+                id="reviewer-001",
+                name="Reviewer Agent",
+                type="reviewer",
+                status=AgentStatus.IDLE,
+                tasks_completed=8,
+                tasks_pending=1,
+                metadata={"model": "gpt-4", "priority": "high"}
+            ),
+        ]
+        for agent in sample_agents:
+            self._agents[agent.id] = agent
+    
+    async def get_all(self) -> List[Agent]:
+        """Get all agents."""
         async with self._lock:
-            if agent_id not in self._agents:
-                self._agents[agent_id] = AgentState(
-                    id=agent_id,
-                    name=name or f"Agent {agent_id}",
-                    last_activity=datetime.utcnow().isoformat()
-                )
-            return self._agents[agent_id]
+            return list(self._agents.values())
     
-    async def get_agent(self, agent_id: str) -> Optional[AgentState]:
+    async def get(self, agent_id: str) -> Optional[Agent]:
         """Get agent by ID."""
         async with self._lock:
             return self._agents.get(agent_id)
     
-    async def list_agents(self) -> List[AgentState]:
-        """List all agents."""
+    async def ensure_agent(self, agent: Agent) -> Agent:
+        """Ensure agent exists (create if not present)."""
         async with self._lock:
-            return list(self._agents.values())
+            if agent.id not in self._agents:
+                self._agents[agent.id] = agent
+            return self._agents[agent.id]
     
-    async def update_agent(self, agent_id: str, **kwargs) -> AgentState:
-        """Update agent state."""
+    async def update_agent(self, agent_id: str, updates: Dict[str, Any]) -> Optional[Agent]:
+        """Update agent fields."""
         async with self._lock:
             if agent_id not in self._agents:
-                raise ValueError(f"Agent {agent_id} not found")
+                return None
             agent = self._agents[agent_id]
-            for key, value in kwargs.items():
+            for key, value in updates.items():
                 if hasattr(agent, key):
                     setattr(agent, key, value)
-            agent.last_activity = datetime.utcnow().isoformat()
+            agent.last_update = datetime.utcnow().isoformat()
             return agent
     
-    async def delete_agent(self, agent_id: str):
+    async def remove_agent(self, agent_id: str) -> bool:
         """Remove agent from store."""
         async with self._lock:
             if agent_id in self._agents:
                 del self._agents[agent_id]
+                return True
+            return False
 
 
-# Global store instance
-agent_store = AgentStore()
-
-
-# ============================================================================
-# WebSocket Connection Manager
-# ============================================================================
+# --- WebSocket Connection Manager ---
 
 class ConnectionManager:
-    """
-    Manages WebSocket connections for real-time updates.
+    """Manages WebSocket connections with concurrent broadcast support.
     
-    Features:
-    - Non-blocking broadcast using asyncio.create_task
-    - Automatic cleanup of disconnected clients
-    - Safe concurrent access
+    Production replacement notes:
+    - Replace with Redis pub/sub for scalability
+    - Use WebSocket gateway (e.g., Socket.IO with Redis adapter)
     """
     
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: Set[WebSocket] = set()
         self._lock = asyncio.Lock()
     
     async def connect(self, websocket: WebSocket):
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
         async with self._lock:
-            self.active_connections.append(websocket)
-        logger.info(f"WebSocket connected. Total connections: {len(self.active_connections)}")
+            self.active_connections.add(websocket)
     
     async def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection."""
         async with self._lock:
-            if websocket in self.active_connections:
-                self.active_connections.remove(websocket)
-        logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
+            self.active_connections.discard(websocket)
     
-    async def _send_to_client(self, websocket: WebSocket, message: dict):
-        """Send message to a single client with error handling."""
-        try:
-            await websocket.send_json(message)
-        except Exception as e:
-            logger.warning(f"Failed to send to client: {e}")
-            await self.disconnect(websocket)
-    
-    async def broadcast(self, message: dict):
-        """
-        Broadcast message to all connected clients.
+    async def broadcast(self, message: WebSocketMessage):
+        """Broadcast message to all connected clients (non-blocking).
         
-        Uses asyncio.create_task for non-blocking sends.
+        Failed sends are handled gracefully without blocking other clients.
         """
+        message_json = message.model_dump_json()
+        
+        # Create tasks for all connections
         async with self._lock:
-            connections = self.active_connections.copy()
+            connections = list(self.active_connections)
         
-        for connection in connections:
-            asyncio.create_task(self._send_to_client(connection, message))
+        # Send to all connections concurrently
+        send_tasks = [self._send_message(ws, message_json) for ws in connections]
+        if send_tasks:
+            await asyncio.gather(*send_tasks, return_exceptions=True)
     
-    async def send_snapshot(self, websocket: WebSocket):
-        """Send current state snapshot to a newly connected client."""
-        agents = await agent_store.list_agents()
-        snapshot = {
-            "type": "snapshot",
-            "timestamp": datetime.utcnow().isoformat(),
-            "agents": [agent.model_dump() for agent in agents]
-        }
-        await websocket.send_json(snapshot)
+    async def _send_message(self, websocket: WebSocket, message: str):
+        """Send message to a single WebSocket (with error handling)."""
+        try:
+            await websocket.send_text(message)
+        except Exception:
+            # Connection likely closed; will be cleaned up on next disconnect
+            pass
 
 
-# Global connection manager
-connection_manager = ConnectionManager()
+# --- Global Instances ---
+
+store = AgentStore()
+manager = ConnectionManager()
+router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
-# ============================================================================
-# REST API Endpoints
-# ============================================================================
+# --- REST Endpoints ---
 
-@router.get("/", response_model=List[AgentState])
+@router.get("", response_model=List[Agent])
 async def list_agents():
-    """
-    List all agents with their current state.
-    
-    Returns a list of all registered agents with their status, tasks, and metrics.
-    """
-    agents = await agent_store.list_agents()
+    """List all agents."""
+    agents = await store.get_all()
     return agents
 
 
-@router.get("/{agent_id}", response_model=AgentState)
-async def get_agent_detail(agent_id: str):
-    """
-    Get detailed information about a specific agent.
-    
-    Args:
-        agent_id: Unique identifier for the agent
-    
-    Returns:
-        Agent state with all details
-    
-    Raises:
-        HTTPException: 404 if agent not found
-    """
-    agent = await agent_store.get_agent(agent_id)
+@router.get("/{agent_id}", response_model=Agent)
+async def get_agent(agent_id: str):
+    """Get details of a specific agent."""
+    agent = await store.get(agent_id)
     if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 
 @router.post("/{agent_id}/action")
-async def execute_agent_action(agent_id: str, action: AgentAction):
-    """
-    Execute an action on a specific agent.
-    
-    Supported actions:
-    - pause: Pause agent execution
-    - resume: Resume paused agent
-    - stop: Stop agent gracefully
-    - restart: Restart agent
-    - prioritize: Prioritize agent tasks (requires priority parameter)
-    
-    Args:
-        agent_id: Unique identifier for the agent
-        action: Action details including action type and parameters
-    
-    Returns:
-        Confirmation message with new agent state
-    
-    Raises:
-        HTTPException: 404 if agent not found, 400 if invalid action
-    """
-    # Validate agent exists
-    agent = await agent_store.get_agent(agent_id)
+async def execute_action(agent_id: str, action_request: ActionRequest):
+    """Execute an action on an agent (pause/resume/stop/restart/prioritize)."""
+    agent = await store.get(agent_id)
     if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Process action
-    action_type = action.action.lower()
+    # Validate and execute action
+    action = action_request.action
+    updates: Dict[str, Any] = {}
     
-    if action_type == "pause":
-        if agent.status != "running":
-            raise HTTPException(status_code=400, detail="Can only pause running agents")
-        updated_agent = await agent_store.update_agent(agent_id, status="paused")
-        message = f"Agent {agent_id} paused"
+    if action == AgentAction.PAUSE:
+        if agent.status != AgentStatus.RUNNING:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot pause agent in {agent.status} state"
+            )
+        updates["status"] = AgentStatus.PAUSED
     
-    elif action_type == "resume":
-        if agent.status != "paused":
-            raise HTTPException(status_code=400, detail="Can only resume paused agents")
-        updated_agent = await agent_store.update_agent(agent_id, status="running")
-        message = f"Agent {agent_id} resumed"
+    elif action == AgentAction.RESUME:
+        if agent.status != AgentStatus.PAUSED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot resume agent in {agent.status} state"
+            )
+        updates["status"] = AgentStatus.RUNNING
     
-    elif action_type == "stop":
-        updated_agent = await agent_store.update_agent(agent_id, status="stopped", current_task=None)
-        message = f"Agent {agent_id} stopped"
+    elif action == AgentAction.STOP:
+        if agent.status == AgentStatus.STOPPED:
+            raise HTTPException(
+                status_code=400,
+                detail="Agent is already stopped"
+            )
+        updates["status"] = AgentStatus.STOPPED
+        updates["current_task"] = None
     
-    elif action_type == "restart":
-        updated_agent = await agent_store.update_agent(
-            agent_id,
-            status="running",
-            current_task=None,
-            tasks_pending=0,
-            uptime_seconds=0.0
+    elif action == AgentAction.RESTART:
+        # Restart resets the agent to initial state
+        updates["status"] = AgentStatus.RUNNING
+        updates["tasks_completed"] = 0
+        updates["tasks_pending"] = 0
+    
+    elif action == AgentAction.PRIORITIZE:
+        priority = action_request.parameters.get("priority", "high")
+        if agent.metadata is None:
+            agent.metadata = {}
+        agent.metadata["priority"] = priority
+        updates["metadata"] = agent.metadata
+    
+    # Apply updates
+    updated_agent = await store.update_agent(agent_id, updates)
+    
+    # Broadcast update via WebSocket
+    await manager.broadcast(
+        WebSocketMessage(
+            type="agent_updated",
+            data=updated_agent.model_dump() if updated_agent else {}
         )
-        message = f"Agent {agent_id} restarted"
-    
-    elif action_type == "prioritize":
-        priority = action.parameters.get("priority")
-        if priority is None:
-            raise HTTPException(status_code=400, detail="Priority parameter required")
-        updated_agent = await agent_store.update_agent(agent_id)
-        updated_agent.metrics["priority"] = priority
-        message = f"Agent {agent_id} priority set to {priority}"
-    
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {action_type}")
-    
-    # Broadcast update to WebSocket clients
-    asyncio.create_task(connection_manager.broadcast({
-        "type": "agent_updated",
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent": updated_agent.model_dump()
-    }))
+    )
     
     return {
-        "message": message,
+        "message": f"Action {action} executed successfully",
         "agent": updated_agent
     }
 
 
-# ============================================================================
-# WebSocket Endpoint
-# ============================================================================
+# --- WebSocket Endpoint ---
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time agent updates.
+    """WebSocket endpoint for real-time updates.
     
-    Protocol:
-    1. Client connects
-    2. Server sends snapshot of all agents
-    3. Server broadcasts events:
-       - agent_updated: Agent state changed
-       - task_added: New task assigned to agent
-       - task_completed: Task finished
-       - log_line: Log message from agent
-    
-    Example messages:
-    - Snapshot: {"type": "snapshot", "timestamp": "...", "agents": [...]}
-    - Update: {"type": "agent_updated", "timestamp": "...", "agent": {...}}
-    - Task: {"type": "task_added", "timestamp": "...", "task": {...}}
+    On connect: Sends complete snapshot of all agents
+    Then: Broadcasts events (agent_updated, task_added, task_completed, log_line)
     """
-    await connection_manager.connect(websocket)
+    await manager.connect(websocket)
     
     try:
         # Send initial snapshot
-        await connection_manager.send_snapshot(websocket)
+        agents = await store.get_all()
+        snapshot = WebSocketMessage(
+            type="snapshot",
+            data=[agent.model_dump() for agent in agents]
+        )
+        await websocket.send_text(snapshot.model_dump_json())
         
         # Keep connection alive and handle incoming messages
         while True:
-            # Wait for messages from client (e.g., ping/pong, subscriptions)
+            # Wait for messages from client (e.g., ping/pong for keepalive)
             data = await websocket.receive_text()
             
-            # Echo back or handle client messages if needed
+            # Echo back for keepalive (optional: handle client commands)
             try:
                 message = json.loads(data)
                 if message.get("type") == "ping":
-                    await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+                    await websocket.send_text(json.dumps({"type": "pong"}))
             except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON received: {data}")
+                pass
     
     except WebSocketDisconnect:
-        await connection_manager.disconnect(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await connection_manager.disconnect(websocket)
+        await manager.disconnect(websocket)
+    except Exception:
+        await manager.disconnect(websocket)
 
 
-# ============================================================================
-# Helper Functions for Broadcasting Events
-# ============================================================================
+# --- Helper functions for external use ---
 
-async def broadcast_task_added(agent_id: str, task_id: str, description: str):
-    """
-    Broadcast that a new task was added to an agent.
-    
-    Call this when assigning work to an agent.
-    """
-    await connection_manager.broadcast({
-        "type": "task_added",
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent_id": agent_id,
-        "task": {
-            "task_id": task_id,
-            "description": description,
-            "status": "pending"
-        }
-    })
-    
-    # Update agent's pending tasks count
-    agent = await agent_store.get_agent(agent_id)
-    if agent:
-        await agent_store.update_agent(agent_id, tasks_pending=agent.tasks_pending + 1)
-
-
-async def broadcast_task_completed(agent_id: str, task_id: str, success: bool = True):
-    """
-    Broadcast that an agent completed a task.
-    
-    Call this when an agent finishes work.
-    """
-    await connection_manager.broadcast({
-        "type": "task_completed",
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent_id": agent_id,
-        "task_id": task_id,
-        "success": success
-    })
-    
-    # Update agent's task counts
-    agent = await agent_store.get_agent(agent_id)
-    if agent:
-        await agent_store.update_agent(
-            agent_id,
-            tasks_pending=max(0, agent.tasks_pending - 1),
-            tasks_completed=agent.tasks_completed + (1 if success else 0),
-            tasks_failed=agent.tasks_failed + (0 if success else 1),
-            current_task=None
+async def broadcast_task_added(agent_id: str, task_description: str):
+    """Broadcast that a task was added to an agent."""
+    await manager.broadcast(
+        WebSocketMessage(
+            type="task_added",
+            data={"agent_id": agent_id, "task": task_description}
         )
+    )
 
 
-async def broadcast_log_line(agent_id: str, level: str, message: str):
-    """
-    Broadcast a log line from an agent.
+async def broadcast_task_completed(agent_id: str, task_description: str):
+    """Broadcast that a task was completed by an agent."""
+    agent = await store.get(agent_id)
+    if agent:
+        await store.update_agent(agent_id, {"tasks_completed": agent.tasks_completed + 1})
     
-    Call this to stream agent logs to the dashboard.
-    """
-    await connection_manager.broadcast({
-        "type": "log_line",
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent_id": agent_id,
-        "level": level,
-        "message": message
-    })
+    await manager.broadcast(
+        WebSocketMessage(
+            type="task_completed",
+            data={"agent_id": agent_id, "task": task_description}
+        )
+    )
 
 
-# ============================================================================
-# Initialization
-# ============================================================================
-
-async def initialize_demo_agents():
-    """
-    Initialize some demo agents for testing.
-    
-    This is called on startup to populate the store with example data.
-    Remove or modify for production use.
-    """
-    demo_agents = [
-        {"id": "planner", "name": "Planner Agent", "status": "idle"},
-        {"id": "executor", "name": "Executor Agent", "status": "idle"},
-        {"id": "reviewer", "name": "Reviewer Agent", "status": "idle"},
-    ]
-    
-    for agent_data in demo_agents:
-        await agent_store.ensure_agent(agent_data["id"], agent_data["name"])
-        await agent_store.update_agent(agent_data["id"], status=agent_data["status"])
-    
-    logger.info(f"Initialized {len(demo_agents)} demo agents")
-
-
-# Note: Integration points for model calls
-# =========================================
-# When integrating with Ollama, GitHub Models, or other model providers:
-# 
-# 1. If the SDK is synchronous (blocking), wrap calls with run_in_executor:
-#    
-#    loop = asyncio.get_event_loop()
-#    result = await loop.run_in_executor(None, blocking_model_call, prompt)
-#
-# 2. If the SDK is async-native, call directly:
-#    
-#    result = await async_model_call(prompt)
-#
-# 3. For long-running model operations, update agent status and broadcast:
-#    
-#    await agent_store.update_agent(agent_id, status="running", current_task="Generating response")
-#    await connection_manager.broadcast({...})
-#    result = await model_call()
-#    await agent_store.update_agent(agent_id, status="idle", current_task=None)
+async def broadcast_log_line(agent_id: str, log_message: str, level: str = "info"):
+    """Broadcast a log line from an agent."""
+    await manager.broadcast(
+        WebSocketMessage(
+            type="log_line",
+            data={"agent_id": agent_id, "message": log_message, "level": level}
+        )
+    )

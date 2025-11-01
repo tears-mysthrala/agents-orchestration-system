@@ -1,102 +1,131 @@
-# Web Module - Real-time Agent Management
+# Web Dashboard - Real-time Agent Management
 
-This module provides a web-based interface for managing and monitoring agents in real-time using WebSocket and REST APIs.
+Web interface for real-time monitoring and control of orchestration agents. Built with FastAPI (backend) and vanilla JavaScript (frontend) for maximum compatibility.
 
 ## Features
 
-- **REST API** for agent management (list, detail, actions)
-- **WebSocket** endpoint for real-time updates
-- **Dashboard UI** with live agent status monitoring
-- **Action Controls** to pause, resume, stop, and restart agents
-- **Live Logs** streaming from agents to the dashboard
-- **Metrics Dashboard** showing agent activity and task completion
+- **Real-time Updates**: WebSocket-based live updates of agent status
+- **Agent Management**: Control agents with actions (pause, resume, stop, restart, prioritize)
+- **REST API**: Full REST API for programmatic access
+- **Cross-platform**: Works on Windows 11 and Arch Linux
+- **Monitoring**: Health checks and Prometheus-compatible metrics
+
+## Architecture
+
+### Backend (FastAPI)
+
+- **web/app.py**: Main FastAPI application with health/metrics endpoints
+- **web/routers/agents.py**: Agents router with REST API and WebSocket support
+  - In-memory store (ready to be replaced with Redis)
+  - Thread-safe operations with asyncio.Lock
+  - WebSocket connection manager for broadcasting
+
+### Frontend (HTML/JS)
+
+- **web/static/dashboard.html**: Dashboard UI
+- **web/static/app.js**: WebSocket client and UI logic
+- Compatible with modern browsers on Windows and Linux
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Windows 11
 
-```bash
+```powershell
+# Activate virtual environment
+.venv\Scripts\Activate.ps1
+
+# Install dependencies (if not already installed)
 pip install -r requirements.txt
+
+# Run the web server
+python scripts\run_web.py
 ```
 
-### 2. Run the Web Server
-
-From the repository root:
+### Linux (Arch, Ubuntu, etc.)
 
 ```bash
-# Using uvicorn directly
-uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
+# Activate virtual environment
+source .venv/bin/activate
 
-# Or using the provided script
+# Install dependencies (if not already installed)
+pip install -r requirements.txt
+
+# Optional: Install uvloop for better performance (Linux only)
+pip install uvloop
+
+# Run the web server
 python scripts/run_web.py
 ```
 
-### 3. Access the Dashboard
+### Access the Dashboard
 
 Open your browser and navigate to:
-
-- **Main Interface**: http://localhost:8000/
-- **Agent Dashboard**: http://localhost:8000/static/dashboard.html
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **Dashboard**: http://127.0.0.1:8000/static/dashboard.html
+- **API Documentation**: http://127.0.0.1:8000/docs (Swagger UI)
+- **Health Check**: http://127.0.0.1:8000/health
+- **Metrics**: http://127.0.0.1:8000/metrics
 
 ## API Endpoints
 
-### Health & Metrics
+### REST API
 
-- `GET /health` - Health check endpoint
-- `GET /metrics` - Basic application metrics
+#### List Agents
+```
+GET /api/agents
+```
 
-### Agent Management (REST API)
+Returns list of all agents with their current status.
 
-- `GET /api/agents` - List all agents
-- `GET /api/agents/{agent_id}` - Get agent details
-- `POST /api/agents/{agent_id}/action` - Execute action on agent
+#### Get Agent Details
+```
+GET /api/agents/{agent_id}
+```
 
-#### Supported Actions
+Returns detailed information about a specific agent.
 
-```json
-// Pause a running agent
+#### Execute Action
+```
+POST /api/agents/{agent_id}/action
+Content-Type: application/json
+
 {
-  "action": "pause"
-}
-
-// Resume a paused agent
-{
-  "action": "resume"
-}
-
-// Stop an agent
-{
-  "action": "stop"
-}
-
-// Restart an agent
-{
-  "action": "restart"
-}
-
-// Prioritize an agent (requires priority parameter)
-{
-  "action": "prioritize",
+  "action": "pause|resume|stop|restart|prioritize",
   "parameters": {
-    "priority": 10
+    "priority": "high"  // For prioritize action
   }
 }
 ```
 
-### WebSocket (Real-time Updates)
+Available actions:
+- **pause**: Pause a running agent
+- **resume**: Resume a paused agent
+- **stop**: Stop an agent
+- **restart**: Restart an agent (resets task counters)
+- **prioritize**: Change agent priority
 
-Connect to: `ws://localhost:8000/api/agents/ws`
+### WebSocket
 
-#### Message Types (Server → Client)
+#### Real-time Updates
+```
+WS /api/agents/ws
+```
 
-**Snapshot** (sent on connection):
+Connect to receive real-time updates. Messages are JSON-formatted:
+
+**Snapshot** (sent on connect):
 ```json
 {
   "type": "snapshot",
-  "timestamp": "2024-11-01T12:00:00",
-  "agents": [...]
+  "data": [
+    {
+      "id": "planner-001",
+      "name": "Planner Agent",
+      "status": "running",
+      "tasks_completed": 5,
+      "tasks_pending": 2
+    }
+  ],
+  "timestamp": "2024-11-01T12:00:00.000Z"
 }
 ```
 
@@ -104,33 +133,22 @@ Connect to: `ws://localhost:8000/api/agents/ws`
 ```json
 {
   "type": "agent_updated",
-  "timestamp": "2024-11-01T12:00:01",
-  "agent": {...}
+  "data": {
+    "id": "planner-001",
+    "status": "paused"
+  },
+  "timestamp": "2024-11-01T12:00:00.000Z"
 }
 ```
 
-**Task Added**:
+**Task Events**:
 ```json
 {
-  "type": "task_added",
-  "timestamp": "2024-11-01T12:00:02",
-  "agent_id": "planner",
-  "task": {
-    "task_id": "task-123",
-    "description": "Generate project plan",
-    "status": "pending"
+  "type": "task_added|task_completed",
+  "data": {
+    "agent_id": "planner-001",
+    "task": "Task description"
   }
-}
-```
-
-**Task Completed**:
-```json
-{
-  "type": "task_completed",
-  "timestamp": "2024-11-01T12:00:03",
-  "agent_id": "executor",
-  "task_id": "task-123",
-  "success": true
 }
 ```
 
@@ -138,294 +156,175 @@ Connect to: `ws://localhost:8000/api/agents/ws`
 ```json
 {
   "type": "log_line",
-  "timestamp": "2024-11-01T12:00:04",
-  "agent_id": "reviewer",
-  "level": "info",
-  "message": "Starting review process..."
+  "data": {
+    "agent_id": "planner-001",
+    "message": "Processing task...",
+    "level": "info"
+  }
 }
 ```
 
-#### Message Types (Client → Server)
+### Health & Metrics
 
-**Ping** (keep-alive):
-```json
-{
-  "type": "ping"
-}
+#### Health Check
+```
+GET /health
 ```
 
-Server responds with:
-```json
-{
-  "type": "pong",
-  "timestamp": "2024-11-01T12:00:05"
-}
+Returns server health status.
+
+#### Metrics (Prometheus-compatible)
+```
+GET /metrics
 ```
 
-## Testing the WebSocket
+Returns metrics in Prometheus text format.
 
-### Using wscat (Command Line)
+## Development
 
-Install wscat:
-```bash
-npm install -g wscat
-```
-
-Connect and test:
-```bash
-# Connect to WebSocket
-wscat -c ws://localhost:8000/api/agents/ws
-
-# You'll receive a snapshot
-# Send a ping
-> {"type": "ping"}
-
-# You'll receive a pong
-< {"type": "pong", "timestamp": "..."}
-```
-
-### Using the Dashboard
-
-1. Open http://localhost:8000/static/dashboard.html
-2. The dashboard automatically connects to the WebSocket
-3. You'll see the connection status in the top-right corner
-4. Agent list updates in real-time
-5. Use action buttons to control agents
-6. Watch logs in the live log panel
-
-### Using Python
-
-```python
-import asyncio
-import websockets
-import json
-
-async def test_websocket():
-    uri = "ws://localhost:8000/api/agents/ws"
-    async with websockets.connect(uri) as websocket:
-        # Receive snapshot
-        snapshot = await websocket.recv()
-        print(f"Snapshot: {snapshot}")
-        
-        # Send ping
-        await websocket.send(json.dumps({"type": "ping"}))
-        
-        # Receive pong
-        pong = await websocket.recv()
-        print(f"Pong: {pong}")
-
-asyncio.run(test_websocket())
-```
-
-## Testing the REST API
-
-### Using curl
-
-```bash
-# List all agents
-curl http://localhost:8000/api/agents
-
-# Get specific agent
-curl http://localhost:8000/api/agents/planner
-
-# Execute action
-curl -X POST http://localhost:8000/api/agents/planner/action \
-  -H "Content-Type: application/json" \
-  -d '{"action": "restart"}'
-
-# Prioritize agent
-curl -X POST http://localhost:8000/api/agents/executor/action \
-  -H "Content-Type: application/json" \
-  -d '{"action": "prioritize", "parameters": {"priority": 10}}'
-```
-
-### Using httpie
-
-```bash
-# List agents
-http GET http://localhost:8000/api/agents
-
-# Execute action
-http POST http://localhost:8000/api/agents/planner/action action=restart
-```
-
-## Running Tests
+### Running Tests
 
 ```bash
 # Run all tests
 pytest tests/test_agents_api.py -v
 
 # Run specific test class
-pytest tests/test_agents_api.py::TestAgentRestAPI -v
+pytest tests/test_agents_api.py::TestAgentsRESTAPI -v
 
 # Run with coverage
-pytest tests/test_agents_api.py --cov=web.routers.agents --cov-report=html
+pytest tests/test_agents_api.py --cov=web --cov-report=html
 ```
 
-## Architecture
-
-### Components
-
-1. **web/app.py** - FastAPI application with endpoints and router registration
-2. **web/routers/agents.py** - Agent management REST API and WebSocket handler
-3. **web/static/dashboard.html** - Dashboard UI
-4. **web/static/app.js** - WebSocket client and UI logic
-
-### Data Flow
+### Project Structure
 
 ```
-┌─────────────┐      WebSocket      ┌──────────────┐
-│  Dashboard  │◄────────────────────►│  FastAPI App │
-└─────────────┘                      └──────────────┘
-                                            │
-                     REST API               │
-                        ▼                   ▼
-                ┌──────────────┐    ┌─────────────┐
-                │ Agent Actions│    │ Agent Store │
-                └──────────────┘    └─────────────┘
-                        │                   │
-                        └───────┬───────────┘
-                                ▼
-                        ┌──────────────┐
-                        │ Broadcast to │
-                        │  All Clients │
-                        └──────────────┘
+web/
+├── app.py                  # Main FastAPI application
+├── routers/
+│   ├── __init__.py
+│   └── agents.py          # Agents router (REST + WebSocket)
+├── static/
+│   ├── dashboard.html     # Dashboard UI
+│   ├── app.js            # WebSocket client
+│   └── index.html        # Legacy interface
+└── README.md             # This file
 ```
 
 ## Production Considerations
 
-### Current Implementation (Development/Testing)
+### Replace In-Memory Store with Redis
 
-- **In-memory store** for agent state
-- **No authentication** on API endpoints
-- **Single instance** deployment
-- **No persistence** - state lost on restart
+The current implementation uses an in-memory store for simplicity. For production with multiple server instances, replace with Redis:
 
-### Recommended for Production
-
-1. **Replace In-Memory Store with Redis**
-   ```python
-   # Use Redis for shared state across instances
-   import redis.asyncio as redis
-   redis_client = await redis.from_url("redis://localhost")
-   ```
-
-2. **Add Authentication**
-   ```python
-   from fastapi import Depends, HTTPException
-   from fastapi.security import HTTPBearer
-   
-   security = HTTPBearer()
-   
-   @router.post("/{agent_id}/action")
-   async def execute_action(
-       agent_id: str,
-       action: AgentAction,
-       token: str = Depends(security)
-   ):
-       # Verify token
-       ...
-   ```
-
-3. **Use Pub/Sub for Multi-Instance**
-   ```python
-   # Broadcast events across instances using Redis Pub/Sub
-   await redis_client.publish("agent_updates", json.dumps(message))
-   ```
-
-4. **Add Rate Limiting**
-   ```python
-   from slowapi import Limiter
-   limiter = Limiter(key_func=get_remote_address)
-   
-   @router.post("/{agent_id}/action")
-   @limiter.limit("10/minute")
-   async def execute_action(...):
-       ...
-   ```
-
-5. **Enable CORS** (if frontend is on different domain)
-   ```python
-   from fastapi.middleware.cors import CORSMiddleware
-   
-   app.add_middleware(
-       CORSMiddleware,
-       allow_origins=["https://yourdomain.com"],
-       allow_credentials=True,
-       allow_methods=["*"],
-       allow_headers=["*"],
-   )
-   ```
-
-6. **Add Monitoring**
-   - Use Prometheus client for metrics
-   - Add structured logging
-   - Implement distributed tracing
-
-## Async Safety Notes
-
-The implementation uses async/await throughout to maintain non-blocking operation:
-
-- **asyncio.create_task()** for broadcasting WebSocket messages
-- **run_in_executor()** for blocking calls (see comments in code)
-- **asyncio.Lock** for thread-safe access to shared state
-
-### Integrating with Model Providers
-
-When calling model SDKs (Ollama, OpenAI, etc.):
-
-**For synchronous/blocking SDKs:**
-```python
-import asyncio
-
-# Wrap blocking call in executor
-loop = asyncio.get_event_loop()
-result = await loop.run_in_executor(None, ollama.generate, prompt)
+**1. Install Redis client:**
+```bash
+pip install redis
 ```
 
-**For async SDKs:**
+**2. Replace store operations in `web/routers/agents.py`:**
+
 ```python
-# Call directly
-result = await openai_client.chat.completions.create(...)
+import redis.asyncio as redis
+
+# Initialize Redis
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+
+# Replace AgentStore methods:
+async def get_all():
+    keys = await redis_client.keys("agent:*")
+    agents = []
+    for key in keys:
+        agent_data = await redis_client.hgetall(key)
+        agents.append(Agent(**agent_data))
+    return agents
+
+async def update_agent(agent_id, updates):
+    await redis_client.hset(f"agent:{agent_id}", mapping=updates)
 ```
+
+**3. Replace WebSocket broadcast with Redis Pub/Sub:**
+
+```python
+async def broadcast(message):
+    await redis_client.publish("agent_events", message.model_dump_json())
+
+# In a separate coroutine:
+async def listen_for_events():
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe("agent_events")
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            # Broadcast to local WebSocket connections
+            await manager._broadcast_to_local(message["data"])
+```
+
+### Security
+
+For production deployment:
+
+1. **Add Authentication**: Implement JWT or OAuth2 authentication
+2. **Rate Limiting**: Add rate limiting to API endpoints
+3. **CORS Configuration**: Configure CORS for specific origins
+4. **HTTPS**: Use HTTPS for WebSocket (WSS) and API endpoints
+5. **Input Validation**: Already implemented with Pydantic models
+
+### Scaling
+
+- Use Redis for shared state across multiple server instances
+- Deploy behind a load balancer (nginx, HAProxy)
+- Use Redis Pub/Sub for WebSocket message distribution
+- Consider using a WebSocket gateway (Socket.IO with Redis adapter)
 
 ## Troubleshooting
 
-### WebSocket Connection Fails
+### WebSocket connection fails
 
-- Check firewall allows port 8000
-- Verify server is running: `curl http://localhost:8000/health`
-- Check browser console for errors
-- Try using `ws://` instead of `wss://` for local testing
+- **Check firewall settings**: Ensure port 8000 is accessible
+- **Verify server is running**: Check that uvicorn is running without errors
+- **Browser console**: Check for JavaScript errors in browser developer tools
 
-### Agents Not Showing Up
+### Agent actions not working
 
-- Check if demo agents initialized: check logs on startup
-- Try refreshing manually with the Refresh button
-- Verify API responds: `curl http://localhost:8000/api/agents`
+- **Check agent status**: Verify the agent is in a valid state for the action
+- **Review server logs**: Look for error messages in the terminal
+- **Test with curl**: Try executing actions via curl to isolate UI issues
 
-### Actions Not Working
+```bash
+curl -X POST http://127.0.0.1:8000/api/agents/planner-001/action \
+  -H "Content-Type: application/json" \
+  -d '{"action":"pause","parameters":{}}'
+```
 
-- Check agent status - some actions only work in specific states
-- Verify action payload in browser Network tab
-- Check server logs for error messages
+### Performance issues
 
-### Tests Failing
+- **On Linux**: Install uvloop for better async performance: `pip install uvloop`
+- **Monitor metrics**: Use `/metrics` endpoint to monitor agent counts
+- **Check logs**: Look for warnings about connection limits or resource usage
 
-- Ensure dependencies installed: `pip install -r requirements.txt`
-- Clean test cache: `pytest --cache-clear`
-- Run with verbose output: `pytest -vv`
+## Platform-Specific Notes
+
+### Windows 11
+
+- Uses standard asyncio ProactorEventLoop (appropriate for Windows)
+- Line endings should be CRLF or LF (Git handles this automatically)
+- PowerShell commands use backslashes for paths (handled by pathlib)
+
+### Linux (Arch, Ubuntu, etc.)
+
+- Can use uvloop for ~2x better async performance
+- Recommended to install uvloop: `pip install uvloop`
+- Line endings should be LF
 
 ## Contributing
 
-When adding new features:
+When contributing to the web interface:
 
-1. Update the REST API in `web/routers/agents.py`
-2. Add corresponding tests in `tests/test_agents_api.py`
-3. Update the dashboard UI if needed
-4. Document new endpoints in this README
-5. Consider async safety and production scalability
+1. Maintain cross-platform compatibility (use pathlib for paths)
+2. Test on both Windows and Linux if possible
+3. Update tests in `tests/test_agents_api.py`
+4. Update this README with new features
+5. Follow existing code style and patterns
 
 ## License
 
-See the main repository LICENSE file.
+Same as parent project (MIT License)
