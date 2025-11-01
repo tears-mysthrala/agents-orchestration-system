@@ -32,7 +32,34 @@ def test(c):
 @task
 def clean(c):
     """Clean up temporary files."""
-    c.run("rm -rf __pycache__ *.pyc .pytest_cache")
+    # Cross-platform cleanup using Python APIs to avoid shell differences.
+    import shutil
+    from pathlib import Path
+
+    cwd = Path(".")
+
+    # Remove common caches and virtualenvs
+    for pattern in ["__pycache__", "*.pyc", ".pytest_cache", ".venv", ".venv_migration", "venv", "env"]:
+        for p in cwd.rglob(pattern):
+            try:
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink()
+            except Exception:
+                pass
+
+    # Clear logs but keep directory
+    logs_dir = cwd / "logs"
+    if logs_dir.exists() and logs_dir.is_dir():
+        for item in logs_dir.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    item.unlink()
+            except Exception:
+                pass
 
 
 @task
