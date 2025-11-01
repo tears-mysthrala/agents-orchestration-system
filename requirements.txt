@@ -24,10 +24,5 @@ langchain-community==0.3.27
 langchain-openai==0.2.0
 starlette>=0.49.1
 urllib3>=2.5.0
-<<<<<<< HEAD
 websockets>=12.0
-# Optional: uvloop for better async performance on Linux only (not available on Windows)
-# On Linux: pip install uvloop
-=======
 pydantic>=2.0.0
->>>>>>> origin/master
