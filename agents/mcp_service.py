@@ -59,6 +59,7 @@ def create_app(
     manager_url: str | None = None,
     host: str = "127.0.0.1",
     port: int = 8100,
+    drain_timeout: int = 30,
 ) -> FastAPI:
     app = FastAPI(
         title=f"Agent Service: {agent_instance.agent_config.get('id', 'unknown')}"
@@ -78,6 +79,8 @@ def create_app(
     # the service should not accept new execute requests and should drain
     # existing work before exiting or restarting.
     app.state._shutdown_requested = False
+    # Drain timeout (seconds) used to bound graceful shutdown/restart waiting
+    app.state._drain_timeout = int(drain_timeout or 30)
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI):
@@ -208,13 +211,13 @@ def create_app(
 
             def _drain_and_exit():
                 try:
-                    # Wait for current task to clear (or timeout after 30s)
+                    # Wait for current task to clear (or timeout after drain_timeout)
                     start = time.time()
                     while True:
                         cur = app.state._lifecycle.get("current_task")
                         if cur is None:
                             break
-                        if time.time() - start > 30:
+                        if time.time() - start > app.state._drain_timeout:
                             break
                         time.sleep(0.1)
                 finally:
@@ -237,7 +240,7 @@ def create_app(
                         cur = app.state._lifecycle.get("current_task")
                         if cur is None:
                             break
-                        if time.time() - start > 30:
+                        if time.time() - start > app.state._drain_timeout:
                             break
                         time.sleep(0.1)
 
@@ -349,7 +352,34 @@ def main():
         # Instantiate agent
         agent = AgentCls(config_path=args.config)
 
-    app = create_app(agent)
+    # Determine drain timeout (env var overrides config)
+    cfg_path = Path(args.config)
+    cfg_drain = None
+    try:
+        if cfg_path.exists():
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            cfg_drain = cfg.get("runtime", {}).get("drainTimeoutSeconds")
+    except Exception:
+        cfg_drain = None
+
+    env_drain = os.environ.get("MCP_DRAIN_TIMEOUT")
+    try:
+        drain_timeout = (
+            int(env_drain)
+            if env_drain is not None
+            else (int(cfg_drain) if cfg_drain is not None else 30)
+        )
+    except Exception:
+        drain_timeout = 30
+
+    app = create_app(
+        agent,
+        manager_url=getattr(args, "manager_url", None),
+        host=(args.host if args.host != "0.0.0.0" else "127.0.0.1"),
+        port=args.port,
+        drain_timeout=drain_timeout,
+    )
 
     # Attempt to register service with the web manager so it can be discovered
     manager_url = getattr(args, "manager_url", None)

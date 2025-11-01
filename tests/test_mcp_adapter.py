@@ -1,4 +1,3 @@
-import json
 from fastapi.testclient import TestClient
 
 from agents.mcp_service import create_app

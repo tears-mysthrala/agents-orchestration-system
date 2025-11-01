@@ -79,7 +79,8 @@ async def lifespan(app: FastAPI):
                 task.cancel()
                 try:
                     await task
-                except Exception:
+                except BaseException:
+                    # Suppress CancelledError and other shutdown-related exceptions
                     pass
         except Exception:
             pass

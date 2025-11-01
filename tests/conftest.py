@@ -1,6 +1,3 @@
-import pytest
-
-
 def pytest_configure(config):
     """Silence colorama/crewai atexit noise in test environment by wrapping reset_all."""
     try:
