@@ -6,6 +6,12 @@
  */
 
 class AgentDashboard {
+    // Agent ID may only contain alphanumerics, underscores, and dashes, 1-64 chars
+    isValidAgentId(agentId) {
+        // Customize as needed for your agent ID format
+        return typeof agentId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(agentId);
+    }
+
     constructor() {
         this.ws = null;
         this.agents = new Map();
@@ -251,6 +257,10 @@ class AgentDashboard {
     }
     
     async executeAction(agentId, action, parameters = {}) {
+        if (!this.isValidAgentId(agentId)) {
+            this.addLog('error', `Invalid agent ID: ${agentId}`);
+            return;
+        }
         try {
             const response = await fetch(`/api/agents/${agentId}/action`, {
                 method: 'POST',
