@@ -66,6 +66,7 @@
       "id": "planner",
       "description": "Analyses backlog entries and produces ordered work plans.",
       "entryPoint": "agents/planner.py",
+      "port": 8100,
       "defaultModel": "llama3.2:latest",
       "tools": [
         "task-registry",
@@ -82,6 +83,7 @@
       "id": "executor",
       "description": "Implements code changes based on planner directives.",
       "entryPoint": "agents/executor.py",
+      "port": 8101,
       "defaultModel": "deepseek-coder:6.7b",
       "tools": [
         "git",
@@ -99,6 +101,7 @@
       "id": "reviewer",
       "description": "Reviews modifications, enforces standards, and raises issues.",
       "entryPoint": "agents/reviewer.py",
+      "port": 8102,
       "defaultModel": "gemma2",
       "tools": [
         "lint",
@@ -115,6 +118,7 @@
       "id": "diagnostic",
       "description": "Monitors system health, detects issues, and provides diagnostic data.",
       "entryPoint": "agents/diagnostic.py",
+      "port": 8103,
       "defaultModel": "phi3.5",
       "tools": [
         "monitoring",
@@ -132,6 +136,7 @@
       "id": "communication",
       "description": "Handles external communication and feedback collection via Telegram/Discord.",
       "entryPoint": "agents/communication.py",
+      "port": 8104,
       "defaultModel": "llama3.2:latest",
       "tools": [
         "telegram_bot",

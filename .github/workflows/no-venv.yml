@@ -1,28 +1,28 @@
 name: Prevent committed virtualenvs and caches
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
 
 jobs:
-  no-venv:
-    name: No committed venvs or caches
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    no-venv:
+        name: No committed venvs or caches
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Ensure no virtualenvs or caches are committed
-        run: |
-          set -e
-          echo "Scanning committed files for forbidden patterns..."
-          forbidden='\\.venv|\\.venv_migration|\bvenv/|\benv/|__pycache__|\\.pytest_cache'
-          matches=$(git ls-files | grep -E "$forbidden" || true)
-          if [ -n "$matches" ]; then
-            echo "Forbidden files detected in commit:";
-            echo "$matches";
-            exit 1;
-          fi
-          echo "No forbidden files found."
+            - name: Ensure no virtualenvs or caches are committed
+              run: |
+                  set -e
+                  echo "Scanning committed files for forbidden patterns..."
+                  forbidden='\\.venv|\\.venv_migration|\bvenv/|\benv/|__pycache__|\\.pytest_cache'
+                  matches=$(git ls-files | grep -E "$forbidden" || true)
+                  if [ -n "$matches" ]; then
+                    echo "Forbidden files detected in commit:";
+                    echo "$matches";
+                    exit 1;
+                  fi
+                  echo "No forbidden files found."

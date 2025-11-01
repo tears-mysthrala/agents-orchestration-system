@@ -1,5 +1,4 @@
-"""
-API web para controlar y monitorizar agentes.
+"""API web para controlar y monitorizar agentes.
 
 Proporciona endpoints para:
 - Listar agentes
@@ -43,11 +42,30 @@ except ImportError as e:
     coordinator = None
 
 from web.routers import agents as agents_router
+from web.routers import manager as manager_router
 
 app = FastAPI(title="Agentes Orchestration Web Interface", version="1.0.0")
 
 # Include real-time agents router
 app.include_router(agents_router.router)
+# Include manager router to forward requests to per-agent services (MCP-style)
+app.include_router(manager_router.router)
+
+
+@app.on_event("startup")
+async def _start_background_tasks():
+    """Start background tasks such as registry cleaner for agent services."""
+    try:
+        # Start the registry cleaner from manager router
+        import web.routers.manager as manager_module
+
+        # Create a background task; it will run until application shutdown
+        import asyncio
+
+        asyncio.create_task(manager_module.start_registry_cleaner())
+    except Exception:
+        logger.exception("Failed to start registry cleaner background task")
+
 
 # Path al archivo de configuración
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "agents.config.json"
