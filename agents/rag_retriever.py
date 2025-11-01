@@ -7,12 +7,13 @@ permitiendo recuperar información relevante de una base de conocimientos.
 
 import os
 from pathlib import Path
-from typing import List, Dict, Any
-from langchain_community.vectorstores import FAISS
+from typing import Any, Dict, List
+
 from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
 
 
 class RAGRetriever:

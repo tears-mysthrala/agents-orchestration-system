@@ -10,19 +10,19 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-        
+
         header {
             background: white;
             border-radius: 10px;
@@ -30,13 +30,13 @@
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        
+
         h1 {
             color: #333;
             font-size: 2em;
             margin-bottom: 10px;
         }
-        
+
         .connection-status {
             display: inline-block;
             padding: 5px 15px;
@@ -45,39 +45,39 @@
             font-weight: 600;
             margin-top: 10px;
         }
-        
+
         .status-connected {
             background: #10b981;
             color: white;
         }
-        
+
         .status-disconnected {
             background: #ef4444;
             color: white;
         }
-        
+
         .status-connecting {
             background: #f59e0b;
             color: white;
         }
-        
+
         .content {
             background: white;
             border-radius: 10px;
             padding: 30px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        
+
         .agents-table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
         }
-        
+
         .agents-table thead {
             background: #f8fafc;
         }
-        
+
         .agents-table th {
             padding: 15px;
             text-align: left;
@@ -88,20 +88,20 @@
             letter-spacing: 0.5px;
             border-bottom: 2px solid #e2e8f0;
         }
-        
+
         .agents-table td {
             padding: 15px;
             border-bottom: 1px solid #e2e8f0;
         }
-        
+
         .agents-table tbody tr {
             transition: background-color 0.2s;
         }
-        
+
         .agents-table tbody tr:hover {
             background: #f8fafc;
         }
-        
+
         .agent-status {
             display: inline-block;
             padding: 5px 12px;
@@ -110,38 +110,38 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        
+
         .status-idle {
             background: #e0e7ff;
             color: #4c51bf;
         }
-        
+
         .status-running {
             background: #d1fae5;
             color: #059669;
         }
-        
+
         .status-paused {
             background: #fef3c7;
             color: #d97706;
         }
-        
+
         .status-stopped {
             background: #fee2e2;
             color: #dc2626;
         }
-        
+
         .status-error {
             background: #fee2e2;
             color: #dc2626;
         }
-        
+
         .actions {
             display: flex;
             gap: 5px;
             flex-wrap: wrap;
         }
-        
+
         .btn {
             padding: 8px 16px;
             border: none;
@@ -153,47 +153,47 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         .btn:active {
             transform: translateY(0);
         }
-        
+
         .btn-pause {
             background: #fbbf24;
             color: #78350f;
         }
-        
+
         .btn-resume {
             background: #10b981;
             color: white;
         }
-        
+
         .btn-stop {
             background: #ef4444;
             color: white;
         }
-        
+
         .btn-restart {
             background: #3b82f6;
             color: white;
         }
-        
+
         .btn-prioritize {
             background: #8b5cf6;
             color: white;
         }
-        
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none !important;
         }
-        
+
         .logs {
             margin-top: 30px;
             background: #1e293b;
@@ -204,50 +204,50 @@
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
         }
-        
+
         .log-entry {
             padding: 5px 0;
             border-bottom: 1px solid #334155;
         }
-        
+
         .log-entry:last-child {
             border-bottom: none;
         }
-        
+
         .log-timestamp {
             color: #94a3b8;
             margin-right: 10px;
         }
-        
+
         .log-level-info {
             color: #60a5fa;
         }
-        
+
         .log-level-warn {
             color: #fbbf24;
         }
-        
+
         .log-level-error {
             color: #ef4444;
         }
-        
+
         .log-message {
             color: #e2e8f0;
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: #94a3b8;
         }
-        
+
         .empty-state svg {
             width: 80px;
             height: 80px;
             margin-bottom: 20px;
             opacity: 0.5;
         }
-        
+
         @keyframes pulse {
             0%, 100% {
                 opacity: 1;
@@ -256,7 +256,7 @@
                 opacity: 0.5;
             }
         }
-        
+
         .updating {
             animation: pulse 1s ease-in-out;
         }
@@ -269,11 +269,11 @@
             <p style="color: #64748b; margin-top: 5px;">Real-time agent monitoring and control</p>
             <span id="connectionStatus" class="connection-status status-connecting">Connecting...</span>
         </header>
-        
+
         <div class="content">
             <h2 style="color: #333; margin-bottom: 10px;">Active Agents</h2>
             <p style="color: #64748b; margin-bottom: 20px;">Monitor and control your orchestration agents in real-time</p>
-            
+
             <table class="agents-table" id="agentsTable">
                 <thead>
                     <tr>
@@ -297,7 +297,7 @@
                     </tr>
                 </tbody>
             </table>
-            
+
             <div class="logs" id="logsContainer">
                 <div style="color: #94a3b8; text-align: center; padding: 20px;">
                     Activity logs will appear here...
@@ -305,7 +305,7 @@
             </div>
         </div>
     </div>
-    
+
     <script src="/static/app.js"></script>
 </body>
 </html>

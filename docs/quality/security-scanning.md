@@ -114,7 +114,7 @@ bandit agents/base_agent.py
   run: |
     pip install bandit
     bandit -r agents/ orchestration/ -f json -o bandit-report.json || true
-    
+
 - name: Upload Bandit results
   uses: actions/upload-artifact@v3
   with:
@@ -292,14 +292,14 @@ def process_user_input(user_data):
     # Validate type
     if not isinstance(user_data, str):
         raise ValueError("Invalid input type")
-    
+
     # Sanitize
     sanitized = user_data.strip()
-    
+
     # Validate length
     if len(sanitized) > 1000:
         raise ValueError("Input too long")
-    
+
     return sanitized
 
 # Bad: Using input directly
@@ -316,10 +316,10 @@ def read_file(filename):
     # Ensure file is in allowed directory
     base_dir = Path("/app/data")
     file_path = (base_dir / filename).resolve()
-    
+
     if not file_path.is_relative_to(base_dir):
         raise ValueError("Path traversal attempt detected")
-    
+
     return file_path.read_text()
 
 # Bad: Direct file access

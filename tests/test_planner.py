@@ -8,11 +8,12 @@ Tests para validar la funcionalidad del planner agent incluyendo:
 - Manejo de errores
 """
 
-import unittest
 import json
 import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
+
 from agents.planner import PlannerAgent
 
 

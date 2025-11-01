@@ -9,34 +9,37 @@ Proporciona endpoints para:
 - Real-time updates via WebSocket
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+import asyncio
 import json
 import logging
-import asyncio
-import time
-from typing import Dict, Any
-from pathlib import Path
-from datetime import datetime
-import sys
 import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Agregar el directorio padre al path para importar módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configure structured logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 try:
     from orchestration.coordinator import AgentCoordinator
+
     coordinator = AgentCoordinator()
 except ImportError as e:
-    logger.warning(f"Could not import AgentCoordinator: {e}. Some features may be unavailable.")
+    logger.warning(
+        f"Could not import AgentCoordinator: {e}. Some features may be unavailable."
+    )
     coordinator = None
 
 from web.routers import agents as agents_router
@@ -70,18 +73,18 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
 @app.get("/metrics")
 async def metrics():
     """Basic metrics endpoint (Prometheus-compatible format).
-    
+
     In production, consider using prometheus_client library for proper metrics.
     """
     agents = await agents_router.store.get_all()
-    
+
     metrics_text = f"""# HELP agents_total Total number of agents
 # TYPE agents_total gauge
 agents_total {len(agents)}
@@ -89,14 +92,14 @@ agents_total {len(agents)}
 # HELP agents_by_status Number of agents by status
 # TYPE agents_by_status gauge
 """
-    
+
     status_counts = {}
     for agent in agents:
         status_counts[agent.status.value] = status_counts.get(agent.status.value, 0) + 1
-    
+
     for status, count in status_counts.items():
         metrics_text += f'agents_by_status{{status="{status}"}} {count}\n'
-    
+
     return metrics_text
 
 
@@ -193,8 +196,11 @@ async def get_workflows():
 async def execute_workflow(workflow_id: str):
     """Ejecuta un workflow completo."""
     if coordinator is None:
-        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
-    
+        raise HTTPException(
+            status_code=503,
+            detail="Coordinator not available. Install required dependencies.",
+        )
+
     try:
         config = load_config()
 
@@ -241,8 +247,11 @@ async def execute_workflow(workflow_id: str):
 async def create_new_project(project: Dict[str, Any]):
     """Crear y ejecutar un nuevo proyecto basado en especificaciones."""
     if coordinator is None:
-        raise HTTPException(status_code=503, detail="Coordinator not available. Install required dependencies.")
-    
+        raise HTTPException(
+            status_code=503,
+            detail="Coordinator not available. Install required dependencies.",
+        )
+
     try:
         markdown = project.get("markdown", "")
         base_path = project.get("base_path", "")
@@ -310,7 +319,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # Example of handling blocking calls with run_in_executor
 async def run_blocking_task(func, *args):
     """Run a blocking function in a thread pool executor.
-    
+
     Example usage for CPU-bound or blocking I/O operations:
         result = await run_blocking_task(some_blocking_function, arg1, arg2)
     """
@@ -320,6 +329,6 @@ async def run_blocking_task(func, *args):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     logger.info("Starting web server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

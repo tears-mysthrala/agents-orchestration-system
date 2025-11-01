@@ -22,18 +22,18 @@ The system automatically attempts fallback providers when the primary fails:
 # From agents/base_agent.py
 def _try_fallback_providers(self, model_name, failed_provider, original_error):
     fallback_providers = self.config["runtime"]["fallbackProviders"]
-    
+
     for provider in fallback_providers:
         if provider == failed_provider:
             continue
-        
+
         try:
             print(f"Attempting fallback: {provider}")
             return self._initialize_llm(provider, model_name)
         except Exception as e:
             print(f"Fallback {provider} failed: {e}")
             continue
-    
+
     raise Exception(f"All providers failed")
 ```
 
@@ -274,7 +274,7 @@ invoke run-parallel
 # tests/test_provider_failover.py
 def test_provider_failover():
     planner = PlannerAgent()
-    
+
     # Mock Ollama failure
     with patch('requests.get', side_effect=ConnectionError):
         # Should fall back to next provider

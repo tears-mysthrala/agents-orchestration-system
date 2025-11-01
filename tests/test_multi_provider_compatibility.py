@@ -5,14 +5,15 @@ Tests para validar que los agentes funcionan correctamente con modelos locales (
 y remotos (GitHub Models, Azure AI Foundry), incluyendo lógica de fallback.
 """
 
-import unittest
 import json
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 from agents.base_agent import BaseAgent
-from agents.planner import PlannerAgent
 from agents.executor import ExecutorAgent
+from agents.planner import PlannerAgent
 from agents.reviewer import ReviewerAgent
 
 

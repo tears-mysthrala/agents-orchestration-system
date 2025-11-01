@@ -277,13 +277,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Check for broken links
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
           use-quiet-mode: 'yes'
           config-file: '.markdown-link-check.json'
-      
+
       - name: Spell check
         uses: rojopolis/spellcheck-github-actions@0.28.0
         with:

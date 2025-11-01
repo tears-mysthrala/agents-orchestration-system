@@ -9,11 +9,12 @@ Tests para validar la funcionalidad del executor agent incluyendo:
 - Integración con git
 """
 
-import unittest
 import json
 import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
+
 from agents.executor import ExecutorAgent
 
 

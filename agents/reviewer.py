@@ -7,8 +7,10 @@ Utiliza modelos locales (Ollama) con fallback a proveedores remotos.
 
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from crewai import Agent, Task, Crew, LLM
+from typing import Any, Dict, List, Optional
+
+from crewai import LLM, Agent, Crew, Task
+
 from .base_agent import BaseAgent
 
 

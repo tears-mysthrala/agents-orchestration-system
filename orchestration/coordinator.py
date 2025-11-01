@@ -8,26 +8,21 @@ Este módulo proporciona:
 """
 
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from logging_config import (
-    get_logger,
-    log_execution_start,
-    log_execution_end,
-    log_agent_action,
-    log_error,
-    setup_logging,
-)
-from agents.planner import PlannerAgent
 from agents.executor import ExecutorAgent
+from agents.planner import PlannerAgent
 from agents.reviewer import ReviewerAgent
-
+from logging_config import (get_logger, log_agent_action, log_error,
+                            log_execution_end, log_execution_start,
+                            setup_logging)
 
 # Configurar logging al importar el módulo
 setup_logging()

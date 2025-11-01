@@ -8,9 +8,11 @@ Usage:
 """
 
 import json
-from pathlib import Path
-from invoke.tasks import task
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+from invoke.tasks import task
+
 from logging_config import get_logger, setup_logging
 
 # Configurar logging
@@ -39,7 +41,15 @@ def clean(c):
     cwd = Path(".")
 
     # Remove common caches and virtualenvs
-    for pattern in ["__pycache__", "*.pyc", ".pytest_cache", ".venv", ".venv_migration", "venv", "env"]:
+    for pattern in [
+        "__pycache__",
+        "*.pyc",
+        ".pytest_cache",
+        ".venv",
+        ".venv_migration",
+        "venv",
+        "env",
+    ]:
         for p in cwd.rglob(pattern):
             try:
                 if p.is_dir():

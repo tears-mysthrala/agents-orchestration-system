@@ -90,7 +90,7 @@ This playbook provides step-by-step procedures for responding to incidents in th
      ```bash
      # For Ollama
      curl http://localhost:11434/api/tags
-     
+
      # For GitHub Models
      curl -H "Authorization: Bearer $GITHUB_TOKEN" https://models.github.com/health
      ```
