@@ -1,4 +1,6 @@
 name: Agent Orchestration CI/CD
+permissions:
+  contents: read
 
 on:
   push:
